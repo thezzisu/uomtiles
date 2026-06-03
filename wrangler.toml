@@ -1,0 +1,27 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "uomtiles"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Public configuration — override locally via `wrangler.toml` overrides or env
+[vars]
+TILE_COLOR = "2980b9"
+TILE_ALPHA = "153"
+PMTILES_KEY = "uom-shifei.pmtiles"
+DJI_KEY = "dji.geojson"
+ALLOWED_ORIGINS = "*"
+CACHE_CONTROL = "public, max-age=86400, s-maxage=604800"
+
+# R2 bucket binding. Bucket must be created by user via `wrangler r2 bucket create`.
+# Then upload pmtiles + dji via `bash scripts/upload.sh`.
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "uomtiles"
+preview_bucket_name = "uomtiles-preview"
+
+# Optional: pin to specific account via env CLOUDFLARE_ACCOUNT_ID
+# Do NOT hard-code account_id in this open-source file.
+
+[observability]
+enabled = true

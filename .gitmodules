@@ -1,0 +1,3 @@
+[submodule "uomfetcher"]
+	path = uomfetcher
+	url = git@github.com:thezzisu/uomfetcher.git

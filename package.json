@@ -1,0 +1,28 @@
+{
+  "name": "uomtiles",
+  "version": "1.0.0",
+  "type": "module",
+  "private": false,
+  "description": "Cloudflare Workers serve for UOM 适飞空域 (CAAC airspace) raster tiles — XYZ / WMS / WMTS + preview with DJI flysafe overlay",
+  "license": "MIT",
+  "homepage": "https://github.com/thezzisu/uomtiles",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thezzisu/uomtiles.git"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "convert": "bash scripts/upload.sh",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.9.0",
+    "pmtiles": "^4.4.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260601.0",
+    "typescript": "^5.6.0",
+    "wrangler": "^4.0.0"
+  }
+}
