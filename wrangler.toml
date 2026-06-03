@@ -20,8 +20,13 @@ binding = "BUCKET"
 bucket_name = "uomtiles"
 preview_bucket_name = "uomtiles-preview"
 
-# Optional: pin to specific account via env CLOUDFLARE_ACCOUNT_ID
-# Do NOT hard-code account_id in this open-source file.
+# Custom domain. Cloudflare-managed DNS zone "zzi.su" required.
+# Fork users: replace with your own domain or remove this section to use
+# the default *.workers.dev hostname.
+[[routes]]
+pattern = "uom.zzi.su"
+custom_domain = true
 
 [observability]
 enabled = true
+
