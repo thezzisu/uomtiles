@@ -3,6 +3,7 @@
 
 import type { Context } from "hono";
 import type { Env } from "./pmtiles-r2";
+import { getPMT } from "./pmtiles-r2";
 import { serveTile } from "./wms";
 
 const LAYER = "uom_shifei";
@@ -18,8 +19,6 @@ const SCALE_DENOMS = [
   136494.69336638617, 68247.34668319309, 34123.67334159654, 17061.83667079827,
   8530.918335399136, 4265.459167699568, 2132.729583849784,
 ];
-const Z_MIN = 0;
-const Z_MAX_OVERZOOM = 18; // serve overzoom up to z=18 even though native is z=13
 
 export async function handleWmts(c: Context<{ Bindings: Env }>): Promise<Response> {
   const url = new URL(c.req.url);
@@ -37,25 +36,31 @@ export async function handleWmts(c: Context<{ Bindings: Env }>): Promise<Respons
   return new Response("unsupported WMTS request", { status: 400 });
 }
 
-function wmtsGetCapabilities(c: Context<{ Bindings: Env }>): Response {
+async function wmtsGetCapabilities(c: Context<{ Bindings: Env }>): Promise<Response> {
   const url = new URL(c.req.url);
   const base = `${url.protocol}//${url.host}/wmts`;
   const xyzBase = `${url.protocol}//${url.host}/xyz`;
-  const tileMatrix = SCALE_DENOMS.slice(Z_MIN, Z_MAX_OVERZOOM + 1)
-    .map((sd, i) => {
-      const z = Z_MIN + i;
-      const m = 1 << z;
-      return `      <TileMatrix>
+
+  // Read native zoom range from PMTiles header so clients overzoom natively
+  // for z > maxZoom instead of requesting tiles we'd have to synthesize.
+  const pmt = getPMT(c.env);
+  const header = await pmt.getHeader();
+  const zMin = header.minZoom;
+  const zMax = header.maxZoom;
+
+  const tileMatrix = [];
+  for (let z = zMin; z <= zMax; z++) {
+    const m = 1 << z;
+    tileMatrix.push(`      <TileMatrix>
         <ows:Identifier>${z}</ows:Identifier>
-        <ScaleDenominator>${sd}</ScaleDenominator>
+        <ScaleDenominator>${SCALE_DENOMS[z]}</ScaleDenominator>
         <TopLeftCorner>-20037508.342789244 20037508.342789244</TopLeftCorner>
         <TileWidth>256</TileWidth>
         <TileHeight>256</TileHeight>
         <MatrixWidth>${m}</MatrixWidth>
         <MatrixHeight>${m}</MatrixHeight>
-      </TileMatrix>`;
-    })
-    .join("\n");
+      </TileMatrix>`);
+  }
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <Capabilities xmlns="http://www.opengis.net/wmts/1.0"
               xmlns:ows="http://www.opengis.net/ows/1.1"
@@ -83,10 +88,12 @@ function wmtsGetCapabilities(c: Context<{ Bindings: Env }>): Response {
     <TileMatrixSet>
       <ows:Identifier>${TMS}</ows:Identifier>
       <ows:SupportedCRS>urn:ogc:def:crs:EPSG::3857</ows:SupportedCRS>
-${tileMatrix}
+${tileMatrix.join("\n")}
     </TileMatrixSet>
   </Contents>
   <ServiceMetadataURL xlink:href="${base}?service=WMTS&amp;request=GetCapabilities"/>
 </Capabilities>`;
-  return new Response(xml, { headers: { "content-type": "application/xml;charset=utf-8" } });
+  return new Response(xml, {
+    headers: { "content-type": "application/xml;charset=utf-8" },
+  });
 }

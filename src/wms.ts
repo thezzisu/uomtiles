@@ -8,7 +8,7 @@
 import type { Context } from "hono";
 import { getPMT, TileType } from "./pmtiles-r2";
 import type { Env } from "./pmtiles-r2";
-import { recolorMaskPng, parseColorHex, clampAlpha } from "./tile";
+import { recolorMaskPng, parseColorHex, clampAlpha, overzoomTile } from "./tile";
 
 const EARTH_R = 20037508.342789244;
 const LAYER = "uom_shifei";
@@ -84,22 +84,39 @@ async function serveTile(env: Env, z: number, x: number, y: number, color?: stri
   const header = await pmt.getHeader();
   if (header.tileType !== TileType.Png) return new Response("archive type not PNG", { status: 500 });
   if (z < header.minZoom) return new Response(null, { status: 204 });
-  // overzoom beyond maxZoom: look up parent
+
+  // Overzoom: client requested z > native maxZoom. Look up parent + remember
+  // which sub-region we need to extract.
   let lookupZ = z, lookupX = x, lookupY = y;
+  let dz = 0, subX = 0, subY = 0;
   if (z > header.maxZoom) {
-    const dz = z - header.maxZoom;
+    dz = z - header.maxZoom;
     lookupZ = header.maxZoom;
     lookupX = x >> dz;
     lookupY = y >> dz;
+    subX = x & ((1 << dz) - 1);
+    subY = y & ((1 << dz) - 1);
   }
+
   const tile = await pmt.getZxy(lookupZ, lookupX, lookupY);
   if (!tile) {
-    // Return transparent 256x256 PNG
     return new Response(blankPng(), {
       headers: { "content-type": "image/png", "cache-control": env.CACHE_CONTROL || "public, max-age=86400" },
     });
   }
-  const raw = new Uint8Array(tile.data);
+  let raw: Uint8Array = new Uint8Array(tile.data);
+
+  // Pixel-perfect overzoom (nearest-neighbor sub-region upscale)
+  if (dz > 0) {
+    try {
+      raw = await overzoomTile(raw, dz, subX, subY);
+    } catch (e) {
+      // Fall through with parent tile as-is if decode fails
+      console.warn("overzoom failed", e);
+    }
+  }
+
+  // Recolor canonical mask to client-requested (color, alpha)
   const useColor = color ?? env.TILE_COLOR;
   const useAlpha = alpha ?? env.TILE_ALPHA;
   const [r, g, b] = parseColorHex(useColor);
@@ -110,13 +127,7 @@ async function serveTile(env: Env, z: number, x: number, y: number, color?: stri
   } catch {
     body = raw;
   }
-  // Overzoom: extract sub-region of parent tile
-  if (z > header.maxZoom) {
-    // CSS image-rendering: pixelated on the client handles upscale visually
-    // (we don't WebGL-decode here to avoid CPU cost in the Worker).
-    // Just return the parent tile; client scales.
-  }
-  return new Response(body, {
+  return new Response(body as BodyInit, {
     headers: {
       "content-type": "image/png",
       "cache-control": env.CACHE_CONTROL || "public, max-age=86400",
