@@ -25,46 +25,71 @@ export function buildPreviewHtml(tiandituToken: string): string {
   <title>UOM 适飞空域预览</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
-    html,body,#map{height:100%;margin:0;background:#111;color:#ddd;font:13px/1.5 system-ui,sans-serif}
+    html,body,#map{height:100%;margin:0;background:#111;color:#ddd;font:13px/1.5 system-ui,sans-serif;overscroll-behavior:none}
+    button,input,select,a{touch-action:manipulation}
     .uom-crisp img.leaflet-tile{image-rendering:pixelated;image-rendering:crisp-edges}
-    #zlabel{position:absolute;top:8px;left:50px;z-index:1000;padding:4px 8px;background:#000a;color:#fff;border-radius:4px;font:13px system-ui}
-    .leaflet-control-attribution{font-size:10px}
-    .dji-tip{font-size:11px;line-height:1.4}
-    .legend{position:absolute;bottom:24px;left:8px;z-index:1000;padding:8px 12px;background:#000c;color:#fff;border-radius:4px;max-width:240px}
-    .legend h4{margin:0 0 4px;font-size:12px}
+    #zlabel{position:absolute;top:8px;left:60px;z-index:1000;padding:4px 10px;background:#000a;color:#fff;border-radius:4px;font:13px system-ui;pointer-events:none}
+    .leaflet-control-attribution{font-size:9px;background:#000a !important;color:#bbb}
+    .leaflet-control-attribution a{color:#9cc}
+    .dji-tip{font-size:12px;line-height:1.4}
+    .legend{position:absolute;bottom:24px;left:8px;z-index:1000;padding:8px 12px;background:#000c;color:#fff;border-radius:6px;max-width:240px;font-size:11px}
+    .legend h4{margin:0 0 4px;font-size:12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+    .legend h4 .toggle{font-size:10px;opacity:.7}
+    .legend.collapsed .legend-body{display:none}
     .legend p{margin:2px 0;font-size:11px}
     .legend .swatch{display:inline-block;width:12px;height:12px;border-radius:2px;vertical-align:middle;margin-right:4px}
-    #controls{position:absolute;top:48px;right:8px;z-index:1000;padding:8px;background:#000c;color:#fff;border-radius:4px;display:flex;flex-direction:column;gap:6px}
-    #controls label{font-size:11px;display:flex;align-items:center;gap:4px}
-    #controls input[type=range]{width:120px}
-    #controls input[type=color]{width:36px;height:22px;border:0;padding:0;background:transparent}
-    .leaflet-bar a {background:#fff}
-    .locate-btn{font-size:18px;line-height:30px}
+    #controls{position:absolute;top:8px;right:8px;z-index:1000;padding:10px;background:#000c;color:#fff;border-radius:6px;display:flex;flex-direction:column;gap:8px;min-width:170px;font-size:12px}
+    #controls .ctrl-head{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;font-weight:bold;font-size:12px}
+    #controls.collapsed .ctrl-body{display:none}
+    #controls label{display:flex;align-items:center;gap:6px;line-height:1.6}
+    #controls input[type=range]{flex:1;min-width:60px}
+    #controls input[type=color]{width:36px;height:28px;border:0;padding:0;background:transparent;cursor:pointer}
+    #controls input[type=checkbox]{width:18px;height:18px;cursor:pointer}
+    .leaflet-bar a{background:#fff;width:34px;height:34px;line-height:34px;font-size:16px}
+    .locate-btn{font-size:18px}
     .me-marker{filter:drop-shadow(0 0 4px #4a90e2)}
+    .leaflet-control-layers{font-size:13px;background:#fff !important;color:#222}
+    .leaflet-control-layers-expanded{padding:6px 10px}
+    .leaflet-control-layers label{padding:3px 0}
+
+    @media (max-width: 640px) {
+      #zlabel{font-size:11px;padding:3px 8px}
+      #controls{top:auto;right:8px;bottom:64px;min-width:0;padding:8px}
+      #controls input[type=range]{width:100px}
+      .legend{bottom:8px;left:8px;font-size:10px;padding:6px 10px;max-width:60vw}
+      .legend p{font-size:10px}
+      .leaflet-bar a{width:38px;height:38px;line-height:38px;font-size:18px}
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div id="zlabel"></div>
   <div id="controls">
-    <label>颜色 <input type="color" id="uom-color" value="#2980b9"></label>
-    <label>透明度 <input type="range" id="uom-alpha" min="0" max="255" value="153"><span id="alpha-val">153</span></label>
-    <label><input type="checkbox" id="dji-toggle" checked> DJI 限飞</label>
+    <div class="ctrl-head" id="ctrl-head"><span>设置</span><span class="toggle">▾</span></div>
+    <div class="ctrl-body">
+      <label>颜色 <input type="color" id="uom-color" value="#2980b9"></label>
+      <label>透明度 <input type="range" id="uom-alpha" min="0" max="255" value="153"><span id="alpha-val">153</span></label>
+      <label><input type="checkbox" id="dji-toggle" checked> DJI 限飞</label>
+    </div>
   </div>
-  <div class="legend">
-    <h4>图层</h4>
-    <p><span class="swatch" style="background:#2980b9"></span>UOM 适飞空域</p>
-    <p><span class="swatch" style="background:#ff6b6b"></span>DJI Restricted</p>
-    <p><span class="swatch" style="background:#feca57"></span>DJI Warning / Auth</p>
-    <p><span class="swatch" style="background:#48dbfb"></span>DJI Recommended</p>
-    <p style="font-size:10px;color:#aaa;margin-top:6px">底图均纠偏到 WGS-84, 与 UOM 数据精确对齐</p>
+  <div class="legend" id="legend">
+    <h4 id="legend-head"><span>图层说明</span><span class="toggle">▾</span></h4>
+    <div class="legend-body">
+      <p><span class="swatch" style="background:#2980b9"></span>UOM 适飞空域</p>
+      <p><span class="swatch" style="background:#ff6b6b"></span>DJI Restricted</p>
+      <p><span class="swatch" style="background:#feca57"></span>DJI Warning / Auth</p>
+      <p><span class="swatch" style="background:#48dbfb"></span>DJI Recommended</p>
+      <p style="font-size:10px;color:#aaa;margin-top:6px">底图均纠偏到 WGS-84, 与 UOM 数据精确对齐</p>
+    </div>
   </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/htoooth/Leaflet.ChineseTmsProviders/src/leaflet.ChineseTmsProviders.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/gisarmory/Leaflet.InternetMapCorrection/dist/leaflet.mapCorrection.min.js"></script>
   <script>
 const TDT_TOKEN = ${JSON.stringify(tiandituToken)};
-const map = L.map('map', {minZoom:2, maxZoom:18, attributionControl:true, zoomControl:true}).setView([35, 105], 5);
+const isMobile = window.matchMedia('(max-width: 640px)').matches;
+const map = L.map('map', {minZoom:2, maxZoom:18, attributionControl:true, zoomControl:true, tap:true, tapTolerance:15}).setView([35, 105], 5);
 
 // WGS-84 native basemaps (no shift)
 const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'© OSM'});
@@ -79,23 +104,15 @@ const gaodeSat = L.layerGroup([
   L.tileLayer.chinaProvider('GaoDe.Satellite.Map', {maxZoom:18}),
   L.tileLayer.chinaProvider('GaoDe.Satellite.Annotion', {maxZoom:18}),
 ], {attribution:'© 高德'});
-const tencentVec = L.tileLayer.chinaProvider('Tencent.Normal.Map', {maxZoom:18, attribution:'© 腾讯'});
-const tencentSat = L.tileLayer.chinaProvider('Tencent.Satellite.Map', {maxZoom:18, attribution:'© 腾讯'});
-const geoq = L.tileLayer.chinaProvider('Geoq.Normal.Color', {maxZoom:18, attribution:'© Geoq'});
-const geoqGray = L.tileLayer.chinaProvider('Geoq.Normal.Gray', {maxZoom:18, attribution:'© Geoq'});
 
 const baseMaps = {
-  'CARTO Voyager (默认)': cartoVoy,
-  'OSM': osm,
+  'OSM (默认)': osm,
+  'CARTO Voyager': cartoVoy,
   'CARTO Dark': cartoDark,
   'ESRI 卫星': esriSat,
   'OpenTopo 地形': opentopo,
   '高德矢量': gaodeVec,
   '高德卫星': gaodeSat,
-  '腾讯矢量': tencentVec,
-  '腾讯卫星': tencentSat,
-  'Geoq 彩色': geoq,
-  'Geoq 灰色': geoqGray,
 };
 
 if (TDT_TOKEN) {
@@ -116,9 +133,9 @@ if (TDT_TOKEN) {
   baseMaps['天地图 地形'] = tdtTer;
 }
 
-cartoVoy.addTo(map);
+osm.addTo(map);
 
-// UOM 适飞 overlay (our R2-backed XYZ endpoint)
+// UOM 适飞 overlay
 const uom = L.tileLayer('/xyz/{z}/{x}/{y}.png', {minZoom:2, maxZoom:18, maxNativeZoom:13, opacity:1.0, className:'uom-crisp', attribution:'UOM 适飞'}).addTo(map);
 
 // DJI overlay
@@ -139,7 +156,8 @@ fetch('/dji.geojson').then(r => r.json()).then(geo => {
   }).addTo(map);
 }).catch(e => console.warn('DJI load failed', e));
 
-L.control.layers(baseMaps, {'UOM 适飞': uom}, {collapsed:false, position:'topleft'}).addTo(map);
+// Layer switcher — collapsed on mobile by default
+L.control.layers(baseMaps, {'UOM 适飞': uom}, {collapsed: isMobile, position:'topleft'}).addTo(map);
 
 // Geolocate control
 const locateBtn = L.control({position:'topleft'});
@@ -180,6 +198,20 @@ document.getElementById('uom-alpha').addEventListener('input', refreshUom);
 document.getElementById('dji-toggle').addEventListener('change', e => {
   if (!djiLayer) return;
   if (e.target.checked) djiLayer.addTo(map); else djiLayer.remove();
+});
+
+// Collapse controls + legend on mobile by default
+const controls = document.getElementById('controls');
+const legend = document.getElementById('legend');
+if (isMobile) {
+  controls.classList.add('collapsed');
+  legend.classList.add('collapsed');
+}
+document.getElementById('ctrl-head').addEventListener('click', () => controls.classList.toggle('collapsed'));
+document.getElementById('legend-head').addEventListener('click', () => legend.classList.toggle('collapsed'));
+[...document.querySelectorAll('#controls,#legend')].forEach(el => {
+  L.DomEvent.disableClickPropagation(el);
+  L.DomEvent.disableScrollPropagation(el);
 });
   </script>
 </body>
