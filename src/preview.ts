@@ -1,11 +1,20 @@
 // Inline HTML for the /preview route.
-// Basemaps:
-//   - WGS-84 (perfect alignment): OSM, CARTO Voyager/Dark, ESRI Sat, OpenTopoMap, 天地图 vec/sat
-//   - GCJ-02 (intentionally excluded): Gaode/Baidu/Tencent have ~500m offset.
-//     Per-tile lat/lon correction causes zoom-time jitter because rounding
-//     varies by zoom level. The only correct fix is server-side reprojection.
 //
-// 天地图 needs a free key from https://lbs.tianditu.gov.cn — pass via TIANDITU_TOKEN env var.
+// Architecture (WGS-84 native + reverse-correction for GCJ-02 basemaps):
+//
+//   Leaflet runs in EPSG:3857 / WGS-84 (default). Our UOM raster + DJI
+//   overlay are WGS-84 → align perfectly.
+//
+//   For Chinese basemaps that use GCJ-02 (高德, 腾讯, 百度, Google.cn),
+//   we use:
+//     - Leaflet.ChineseTmsProviders : URL templates + L.tileLayer.chinaProvider
+//     - Leaflet.InternetMapCorrection : auto-intercepts tile fetches and applies
+//       reverse WGS-84 → GCJ-02 lat/lon transformation when computing tile coords,
+//       so the basemap shifts to match the WGS-84 map view.
+//
+//   This is the canonical, smooth, jitter-free fix. See
+//   https://github.com/htoooth/Leaflet.ChineseTmsProviders
+//   https://github.com/gisarmory/Leaflet.InternetMapCorrection
 
 export function buildPreviewHtml(tiandituToken: string): string {
   return `<!DOCTYPE html>
@@ -29,7 +38,7 @@ export function buildPreviewHtml(tiandituToken: string): string {
     #controls label{font-size:11px;display:flex;align-items:center;gap:4px}
     #controls input[type=range]{width:120px}
     #controls input[type=color]{width:36px;height:22px;border:0;padding:0;background:transparent}
-    .leaflet-touch .leaflet-bar a, .leaflet-bar a {background:#fff}
+    .leaflet-bar a {background:#fff}
     .locate-btn{font-size:18px;line-height:30px}
     .me-marker{filter:drop-shadow(0 0 4px #4a90e2)}
   </style>
@@ -48,19 +57,32 @@ export function buildPreviewHtml(tiandituToken: string): string {
     <p><span class="swatch" style="background:#ff6b6b"></span>DJI Restricted</p>
     <p><span class="swatch" style="background:#feca57"></span>DJI Warning / Auth</p>
     <p><span class="swatch" style="background:#48dbfb"></span>DJI Recommended</p>
-    <p style="font-size:10px;color:#aaa;margin-top:6px">底图均为 WGS-84, 与 UOM 数据完美对齐</p>
+    <p style="font-size:10px;color:#aaa;margin-top:6px">底图均纠偏到 WGS-84, 与 UOM 数据精确对齐</p>
   </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/htoooth/Leaflet.ChineseTmsProviders/src/leaflet.ChineseTmsProviders.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/gisarmory/Leaflet.InternetMapCorrection/dist/leaflet.mapCorrection.min.js"></script>
   <script>
 const TDT_TOKEN = ${JSON.stringify(tiandituToken)};
 const map = L.map('map', {minZoom:2, maxZoom:18, attributionControl:true, zoomControl:true}).setView([35, 105], 5);
 
-// All WGS-84 basemaps (no GCJ-02 shift, perfect alignment with UOM data)
+// WGS-84 native basemaps (no shift)
 const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'© OSM'});
 const cartoVoy = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {maxZoom:19, attribution:'© CARTO © OSM'});
 const cartoDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {maxZoom:19, attribution:'© CARTO © OSM'});
 const esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'© Esri'});
 const opentopo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {maxZoom:17, attribution:'© OpenTopoMap (CC-BY-SA)'});
+
+// Chinese basemaps via chinaProvider + mapCorrection (auto WGS-84 ↔ GCJ-02 inverse transform)
+const gaodeVec = L.tileLayer.chinaProvider('GaoDe.Normal.Map', {maxZoom:18, attribution:'© 高德'});
+const gaodeSat = L.layerGroup([
+  L.tileLayer.chinaProvider('GaoDe.Satellite.Map', {maxZoom:18}),
+  L.tileLayer.chinaProvider('GaoDe.Satellite.Annotion', {maxZoom:18}),
+], {attribution:'© 高德'});
+const tencentVec = L.tileLayer.chinaProvider('Tencent.Normal.Map', {maxZoom:18, attribution:'© 腾讯'});
+const tencentSat = L.tileLayer.chinaProvider('Tencent.Satellite.Map', {maxZoom:18, attribution:'© 腾讯'});
+const geoq = L.tileLayer.chinaProvider('Geoq.Normal.Color', {maxZoom:18, attribution:'© Geoq'});
+const geoqGray = L.tileLayer.chinaProvider('Geoq.Normal.Gray', {maxZoom:18, attribution:'© Geoq'});
 
 const baseMaps = {
   'CARTO Voyager (默认)': cartoVoy,
@@ -68,21 +90,26 @@ const baseMaps = {
   'CARTO Dark': cartoDark,
   'ESRI 卫星': esriSat,
   'OpenTopo 地形': opentopo,
+  '高德矢量': gaodeVec,
+  '高德卫星': gaodeSat,
+  '腾讯矢量': tencentVec,
+  '腾讯卫星': tencentSat,
+  'Geoq 彩色': geoq,
+  'Geoq 灰色': geoqGray,
 };
 
 if (TDT_TOKEN) {
-  // 天地图: WGS-84 native (CGCS2000 ≈ WGS-84), 中国境内权威矢量+卫星
   const tdtVec = L.layerGroup([
-    L.tileLayer('https://t{s}.tianditu.gov.cn/DataServer?T=vec_w&X={x}&Y={y}&L={z}&tk='+TDT_TOKEN, {maxZoom:18, subdomains:'01234567'}),
-    L.tileLayer('https://t{s}.tianditu.gov.cn/DataServer?T=cva_w&X={x}&Y={y}&L={z}&tk='+TDT_TOKEN, {maxZoom:18, subdomains:'01234567'}),
+    L.tileLayer.chinaProvider('TianDiTu.Normal.Map', {key: TDT_TOKEN, maxZoom:18}),
+    L.tileLayer.chinaProvider('TianDiTu.Normal.Annotion', {key: TDT_TOKEN, maxZoom:18}),
   ], {attribution:'© 天地图'});
   const tdtSat = L.layerGroup([
-    L.tileLayer('https://t{s}.tianditu.gov.cn/DataServer?T=img_w&X={x}&Y={y}&L={z}&tk='+TDT_TOKEN, {maxZoom:18, subdomains:'01234567'}),
-    L.tileLayer('https://t{s}.tianditu.gov.cn/DataServer?T=cia_w&X={x}&Y={y}&L={z}&tk='+TDT_TOKEN, {maxZoom:18, subdomains:'01234567'}),
+    L.tileLayer.chinaProvider('TianDiTu.Satellite.Map', {key: TDT_TOKEN, maxZoom:18}),
+    L.tileLayer.chinaProvider('TianDiTu.Satellite.Annotion', {key: TDT_TOKEN, maxZoom:18}),
   ], {attribution:'© 天地图'});
   const tdtTer = L.layerGroup([
-    L.tileLayer('https://t{s}.tianditu.gov.cn/DataServer?T=ter_w&X={x}&Y={y}&L={z}&tk='+TDT_TOKEN, {maxZoom:18, subdomains:'01234567'}),
-    L.tileLayer('https://t{s}.tianditu.gov.cn/DataServer?T=cta_w&X={x}&Y={y}&L={z}&tk='+TDT_TOKEN, {maxZoom:18, subdomains:'01234567'}),
+    L.tileLayer.chinaProvider('TianDiTu.Terrain.Map', {key: TDT_TOKEN, maxZoom:18}),
+    L.tileLayer.chinaProvider('TianDiTu.Terrain.Annotion', {key: TDT_TOKEN, maxZoom:18}),
   ], {attribution:'© 天地图'});
   baseMaps['天地图 矢量'] = tdtVec;
   baseMaps['天地图 卫星'] = tdtSat;
@@ -91,7 +118,7 @@ if (TDT_TOKEN) {
 
 cartoVoy.addTo(map);
 
-// UOM 适飞 overlay
+// UOM 适飞 overlay (our R2-backed XYZ endpoint)
 const uom = L.tileLayer('/xyz/{z}/{x}/{y}.png', {minZoom:2, maxZoom:18, maxNativeZoom:13, opacity:1.0, className:'uom-crisp', attribution:'UOM 适飞'}).addTo(map);
 
 // DJI overlay
@@ -112,10 +139,9 @@ fetch('/dji.geojson').then(r => r.json()).then(geo => {
   }).addTo(map);
 }).catch(e => console.warn('DJI load failed', e));
 
-const overlayMaps = {'UOM 适飞': uom};
-L.control.layers(baseMaps, overlayMaps, {collapsed:false, position:'topleft'}).addTo(map);
+L.control.layers(baseMaps, {'UOM 适飞': uom}, {collapsed:false, position:'topleft'}).addTo(map);
 
-// Geolocate control: native browser geolocation (HTTPS required by browsers)
+// Geolocate control
 const locateBtn = L.control({position:'topleft'});
 locateBtn.onAdd = function() {
   const div = L.DomUtil.create('div', 'leaflet-bar');
@@ -138,11 +164,9 @@ map.on('locationfound', e => {
   meMarker = L.circleMarker(e.latlng, {radius:6, color:'#fff', fillColor:'#4a90e2', fillOpacity:1, weight:2, className:'me-marker'}).addTo(map);
   meMarker.bindPopup('你在这里<br>精度 ±' + Math.round(e.accuracy) + 'm').openPopup();
 });
-map.on('locationerror', e => {
-  alert('定位失败: ' + e.message + '\\n\\n需要 HTTPS 协议 + 浏览器位置权限');
-});
+map.on('locationerror', e => alert('定位失败: ' + e.message));
 
-function updateZ() { document.getElementById('zlabel').textContent = 'z=' + map.getZoom(); }
+function updateZ() { document.getElementById('zlabel').textContent = 'z=' + map.getZoom().toFixed(0); }
 map.on('zoomend', updateZ); updateZ();
 
 function refreshUom() {
