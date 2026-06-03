@@ -4,15 +4,17 @@ import { cache } from "hono/cache";
 import type { Env } from "./pmtiles-r2";
 import { serveTile, handleGetMap, getCapabilities as wmsCaps } from "./wms";
 import { handleWmts } from "./wmts";
-import { PREVIEW_HTML } from "./preview";
+import { buildPreviewHtml } from "./preview";
 
-const app = new Hono<{ Bindings: Env }>();
+type AppEnv = Env & { TIANDITU_TOKEN?: string };
+
+const app = new Hono<{ Bindings: AppEnv }>();
 
 app.use("*", cors({ origin: "*", maxAge: 86400 }));
 
 app.get("/", c => c.redirect("/preview"));
 
-app.get("/preview", c => c.html(PREVIEW_HTML));
+app.get("/preview", c => c.html(buildPreviewHtml(c.env.TIANDITU_TOKEN || "")));
 
 app.get(
   "/xyz/:z{[0-9]+}/:x{[0-9]+}/:y{[0-9]+\\.png}",
