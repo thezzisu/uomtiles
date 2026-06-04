@@ -52,8 +52,7 @@ function wgs84ToGcj02(lon, lat) {
   return [lon + dLon, lat + dLat];
 }
 
-// Source tiles needed to cover destination tile bbox (mercator).
-function destTilesToSourceTiles(destBbox, destZ) {
+function destTilesToSourceTiles(destBbox, destZ, sourceTileSize) {
   const [xmin, ymin, xmax, ymax] = destBbox;
   const corners = [[xmin, ymin], [xmax, ymin], [xmin, ymax], [xmax, ymax]];
   const gm = corners.map(([mx, my]) => {
@@ -64,6 +63,8 @@ function destTilesToSourceTiles(destBbox, destZ) {
   const gxs = gm.map(p => p[0]), gys = gm.map(p => p[1]);
   const gMinX = Math.min(...gxs), gMaxX = Math.max(...gxs);
   const gMinY = Math.min(...gys), gMaxY = Math.max(...gys);
+  // Source-tile addressing always uses 256-px tile space (web mercator XYZ scheme).
+  // sourceTileSize only affects pixel sampling within the fetched bitmap.
   const z = destZ, ts = 256;
   const [pxMin, pyMin] = metersToPixels([gMinX, gMinY], z, ts);
   const [pxMax, pyMax] = metersToPixels([gMaxX, gMaxY], z, ts);
@@ -115,9 +116,9 @@ async function fetchBitmap(url) {
   return bmp;
 }
 
-async function reproject({ destTile, destBbox, urlTemplate, tileSize = 256, interval = 32 }) {
+async function reproject({ destTile, destBbox, urlTemplate, tileSize = 256, sourceTileSize = 256, interval = 16 }) {
   const [dx, dy, dz] = destTile;
-  const sources = destTilesToSourceTiles(destBbox, dz).map(s => ({
+  const sources = destTilesToSourceTiles(destBbox, dz, sourceTileSize).map(s => ({
     ...s,
     url: urlTemplate
       .replace("{sx}", s.tile[0]).replace("{sy}", s.tile[1]).replace("{sz}", s.tile[2])
@@ -132,6 +133,7 @@ async function reproject({ destTile, destBbox, urlTemplate, tileSize = 256, inte
   if (!ok.length) return null;
 
   // Build a working canvas covering all source tiles (in source-pixel space).
+  const sts = sourceTileSize;
   const ts = tileSize;
   const sBboxLngLat = ok.map(s => {
     const [bMinX, bMinY, bMaxX, bMaxY] = s.bboxMeters;
@@ -142,8 +144,8 @@ async function reproject({ destTile, destBbox, urlTemplate, tileSize = 256, inte
   });
   const sZ = ok[0].tile[2];
   const sps = sBboxLngLat.map(b => {
-    const p0 = sourceToPixel(b[0], b[1], sZ, ts);
-    const p1 = sourceToPixel(b[2], b[3], sZ, ts);
+    const p0 = sourceToPixel(b[0], b[1], sZ, sts);
+    const p1 = sourceToPixel(b[2], b[3], sZ, sts);
     return [Math.min(p0[0], p1[0]), Math.min(p0[1], p1[1]), Math.max(p0[0], p1[0]), Math.max(p0[1], p1[1])];
   });
   const sMinX = Math.min(...sps.map(p => p[0]));
@@ -155,21 +157,18 @@ async function reproject({ destTile, destBbox, urlTemplate, tileSize = 256, inte
   const workH = Math.ceil(sMaxY - sMinY);
   const work = new OffscreenCanvas(workW, workH);
   const wctx = work.getContext("2d");
+  wctx.imageSmoothingEnabled = true;
+  wctx.imageSmoothingQuality = "high";
   ok.forEach((s, i) => {
     const [pxMin, pyMin] = sps[i];
     wctx.drawImage(s.bmp, Math.round(pxMin - sMinX), Math.round(pyMin - sMinY));
   });
 
-  // Reproject in `interval`-px slices into destination canvas.
   const dst = new OffscreenCanvas(ts, ts);
   const dctx = dst.getContext("2d");
+  dctx.imageSmoothingEnabled = true;
+  dctx.imageSmoothingQuality = "high";
 
-  // Destination pixel origin in mercator-meters.
-  const [dpx0, dpy0] = (() => {
-    const xRes = (destBbox[2] - destBbox[0]) / ts;
-    const yRes = (destBbox[3] - destBbox[1]) / ts;
-    return [destBbox[0], destBbox[3], xRes, yRes];
-  })();
   const xRes = (destBbox[2] - destBbox[0]) / ts;
   const yRes = (destBbox[3] - destBbox[1]) / ts;
 
@@ -177,16 +176,14 @@ async function reproject({ destTile, destBbox, urlTemplate, tileSize = 256, inte
     const dh = Math.min(interval, ts - py);
     for (let px = 0; px < ts; px += interval) {
       const dw = Math.min(interval, ts - px);
-      // Destination pixel patch corners in mercator-meters.
       const m0x = destBbox[0] + px * xRes;
       const m0y = destBbox[3] - py * yRes;
       const m1x = destBbox[0] + (px + dw) * xRes;
       const m1y = destBbox[3] - (py + dh) * yRes;
-      // Map each corner to source-pixel space.
       const [g0Lng, g0Lat] = destinationToSourceCoords(m0x, m0y);
       const [g1Lng, g1Lat] = destinationToSourceCoords(m1x, m1y);
-      const sp0 = sourceToPixel(g0Lng, g0Lat, sZ, ts);
-      const sp1 = sourceToPixel(g1Lng, g1Lat, sZ, ts);
+      const sp0 = sourceToPixel(g0Lng, g0Lat, sZ, sts);
+      const sp1 = sourceToPixel(g1Lng, g1Lat, sZ, sts);
       const sxMin = Math.min(sp0[0], sp1[0]);
       const syMin = Math.min(sp0[1], sp1[1]);
       const sxMax = Math.max(sp0[0], sp1[0]);

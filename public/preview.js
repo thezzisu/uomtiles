@@ -140,13 +140,12 @@ if (!lib || !lib.createProtocol) {
     const REPROJ_URL_RE = /^reproject:\/\/([^:]+):\/\/(.+)$/;
 
     maplibregl.addProtocol("reproject", (params, abort) => {
-      // params.url like:
-      //   reproject://bbox=mx0,my0,mx1,my1&z=Z&x=X&y=Y://https://...{sx}{sy}{sz}...
       const m = params.url.match(REPROJ_URL_RE);
       if (!m) return Promise.reject(new Error("bad url"));
       const qs = new URLSearchParams(m[1]);
       const bbox = (qs.get("bbox") || "").split(",").map(Number);
       const z = +qs.get("z"), x = +qs.get("x"), y = +qs.get("y");
+      const sts = +qs.get("sts") || 256;
       const urlTemplate = m[2];
 
       return new Promise((resolve, reject) => {
@@ -160,7 +159,7 @@ if (!lib || !lib.createProtocol) {
         }
         w.postMessage({
           id, type: "reproject",
-          data: { destTile: [x, y, z], destBbox: bbox, urlTemplate, tileSize: 256, interval: 32 },
+          data: { destTile: [x, y, z], destBbox: bbox, urlTemplate, tileSize: 512, sourceTileSize: sts, interval: 32 },
         });
       });
     });
@@ -174,15 +173,15 @@ if (!lib || !lib.createProtocol) {
   }
 }
 
-function amapTiles(pathQuery) {
+function amapTiles(pathQuery, sts = 512) {
   return AMAP_SUBS.map(s =>
-    `reproject://bbox={bbox-epsg-3857}&z={z}&x={x}&y={y}://` +
-    `https://webrd0${s}.is.autonavi.com/${pathQuery}`
+    `reproject://bbox={bbox-epsg-3857}&z={z}&x={x}&y={y}&sts=${sts}://` +
+    `https://wprd0${s}.is.autonavi.com/${pathQuery}`
   );
 }
-function amapStTiles(pathQuery) {
+function amapStTiles(pathQuery, sts = 256) {
   return AMAP_SUBS.map(s =>
-    `reproject://bbox={bbox-epsg-3857}&z={z}&x={x}&y={y}://` +
+    `reproject://bbox={bbox-epsg-3857}&z={z}&x={x}&y={y}&sts=${sts}://` +
     `https://webst0${s}.is.autonavi.com/${pathQuery}`
   );
 }
@@ -201,9 +200,9 @@ const sources = {
   cartoDark: { type: "raster", tiles: ["https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"], tileSize: 256, minzoom: 0, maxzoom: 19, attribution: "© CARTO" },
   esriSat: { type: "raster", tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"], tileSize: 256, minzoom: 0, maxzoom: 19, attribution: "© Esri" },
   opentopo: { type: "raster", tiles: ["https://a.tile.opentopomap.org/{z}/{x}/{y}.png", "https://b.tile.opentopomap.org/{z}/{x}/{y}.png", "https://c.tile.opentopomap.org/{z}/{x}/{y}.png"], tileSize: 256, minzoom: 0, maxzoom: 17, attribution: "© OpenTopoMap" },
-  amapVec: { type: "raster", tiles: amapTiles("appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={sx}&y={sy}&z={sz}"), tileSize: 256, minzoom: 0, maxzoom: 18, attribution: "© 高德" },
-  amapSat: { type: "raster", tiles: amapStTiles("appmaptile?style=6&x={sx}&y={sy}&z={sz}"), tileSize: 256, minzoom: 0, maxzoom: 18, attribution: "© 高德" },
-  amapSatAnno: { type: "raster", tiles: amapStTiles("appmaptile?style=8&x={sx}&y={sy}&z={sz}"), tileSize: 256, minzoom: 0, maxzoom: 18 },
+  amapVec: { type: "raster", tiles: amapTiles("appmaptile?lang=zh_cn&size=1&scl=2&style=8&x={sx}&y={sy}&z={sz}"), tileSize: 256, minzoom: 0, maxzoom: 18, attribution: "© 高德" },
+  amapSat: { type: "raster", tiles: amapStTiles("appmaptile?style=6&x={sx}&y={sy}&z={sz}", 256), tileSize: 256, minzoom: 0, maxzoom: 18, attribution: "© 高德" },
+  amapSatAnno: { type: "raster", tiles: amapStTiles("appmaptile?style=8&scl=2&size=2&x={sx}&y={sy}&z={sz}", 512), tileSize: 256, minzoom: 0, maxzoom: 18 },
 };
 
 const tdtVec = tdtTiles("vec_w");
