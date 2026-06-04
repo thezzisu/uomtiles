@@ -31,7 +31,7 @@ export async function handleWmts(c: Context<{ Bindings: Env }>): Promise<Respons
     const z = parseInt(q.tilematrix ?? "0", 10);
     const x = parseInt(q.tilecol ?? "0", 10);
     const y = parseInt(q.tilerow ?? "0", 10);
-    return serveTile(c.env, z, x, y, q.color, q.alpha);
+    return serveTile(c.env, z, x, y);
   }
   return new Response("unsupported WMTS request", { status: 400 });
 }

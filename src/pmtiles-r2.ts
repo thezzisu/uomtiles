@@ -12,8 +12,6 @@ export type Env = {
   BUCKET: R2Bucket;
   PMTILES_KEY: string;
   DJI_KEY: string;
-  TILE_COLOR: string;
-  TILE_ALPHA: string;
   ALLOWED_ORIGINS?: string;
   CACHE_CONTROL?: string;
 };

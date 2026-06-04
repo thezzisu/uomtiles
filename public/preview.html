@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes">
+  <title>UOM 适飞空域预览</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="/preview.css">
+</head>
+<body>
+  <div id="map"></div>
+  <div id="zlabel"></div>
+
+  <div id="search-wrap" class="hidden">
+    <span id="search-icon">🔍</span>
+    <input id="search-input" type="search" placeholder="搜索 POI (高德)" autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+
+  <div id="controls">
+    <div class="ctrl-head" id="ctrl-head"><span>设置</span><span class="toggle">▾</span></div>
+    <div class="ctrl-body">
+      <div>底图<div id="basemap-list"></div></div>
+      <label>透明度
+        <input type="range" id="uom-alpha" min="0" max="100" value="60">
+        <span id="alpha-val">60</span>%
+      </label>
+      <div>颜色<div id="color-swatches"></div></div>
+      <label><input type="checkbox" id="dji-toggle" checked> DJI 限飞</label>
+      <label><input type="checkbox" id="uom-toggle" checked> UOM 适飞</label>
+    </div>
+  </div>
+
+  <div class="legend" id="legend">
+    <h4 id="legend-head"><span>图层说明</span><span class="toggle">▾</span></h4>
+    <div class="legend-body">
+      <p><span class="swatch" id="legend-uom-swatch" style="background:#2980b9"></span>UOM 适飞空域</p>
+      <p><span class="swatch" style="background:#ff6b6b"></span>DJI Restricted</p>
+      <p><span class="swatch" style="background:#feca57"></span>DJI Warning / Auth</p>
+      <p><span class="swatch" style="background:#48dbfb"></span>DJI Recommended</p>
+      <p style="font-size:10px;color:#aaa;margin-top:6px">底图自动纠偏到 WGS-84</p>
+    </div>
+  </div>
+
+  <div id="settings-overlay">
+    <div id="settings-panel">
+      <h3>POI 搜索设置</h3>
+      <p>需要高德 Web Service Key (免费, <a href="https://lbs.amap.com/api/webservice/create-project-and-key" target="_blank" rel="noopener">点此申请</a>). 创建应用 → 选择 <b>Web 服务</b>, 拿到 32 位 Key.</p>
+      <p>Key 仅存储在你浏览器 localStorage, 不上传服务端.</p>
+      <label style="font-size:12px;color:#bbb">高德 Web Service Key
+        <input id="amap-key-input" type="text" placeholder="例如 abcd1234...32位" autocomplete="off">
+      </label>
+      <div class="btns">
+        <button class="save" id="amap-key-save">保存</button>
+        <button class="clear" id="amap-key-clear">清除</button>
+        <button class="cancel" id="amap-key-cancel">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/maplibre-gl-raster-reprojection@1.0.4/dist/maplibre-gl-raster-reprojection.umd.cjs"></script>
+  <script src="/preview.js" defer></script>
+</body>
+</html>

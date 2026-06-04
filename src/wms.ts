@@ -1,14 +1,15 @@
-// WMS 1.1.1 + 1.3.0 minimal implementation.
-// Supports:
-//   - service=WMS&request=GetCapabilities
-//   - service=WMS&request=GetMap (bbox + width/height/srs/version)
+// WMS 1.1.1 minimal implementation + canonical-only tile serving.
 //
-// Layer name: uom_shifei (single layer; the underlying PMTiles already holds the merged 30 province content)
+// Worker now returns the *canonical* PNG (#2980b9 α=255) byte-for-byte
+// from PMTiles. No query-string handling, no recoloring, no overzoom
+// processing. This maximizes Cloudflare edge cache hit rate.
+//
+// Clients can recolor / over-zoom on the client side (MapLibre uses GPU
+// raster-hue-rotate and raster-resampling: nearest).
 
 import type { Context } from "hono";
 import { getPMT, TileType } from "./pmtiles-r2";
 import type { Env } from "./pmtiles-r2";
-import { recolorMaskPng, parseColorHex, clampAlpha, overzoomTile } from "./tile";
 
 const EARTH_R = 20037508.342789244;
 const LAYER = "uom_shifei";
@@ -29,8 +30,9 @@ function tileForBbox(bbox: [number, number, number, number], width: number, heig
 export async function handleGetMap(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
   const url = new URL(c.req.url);
-  const q = Object.fromEntries(url.searchParams.entries());
-  const ql = Object.fromEntries(Object.entries(q).map(([k, v]) => [k.toLowerCase(), v]));
+  const ql = Object.fromEntries(
+    [...url.searchParams.entries()].map(([k, v]) => [k.toLowerCase(), v])
+  );
   if (ql.request?.toLowerCase() === "getcapabilities") return getCapabilities(c);
   if (!ql.bbox) return new Response("missing bbox", { status: 400 });
   const bbox = ql.bbox.split(",").map(Number) as [number, number, number, number];
@@ -38,7 +40,7 @@ export async function handleGetMap(c: Context<{ Bindings: Env }>): Promise<Respo
   const h = parseInt(ql.height ?? "256", 10);
   const t = tileForBbox(bbox, w, h);
   if (!t) return new Response("only 256x256 web-mercator tile-aligned bbox supported", { status: 400 });
-  return serveTile(env, t.z, t.x, t.y, ql.color, ql.alpha);
+  return serveTile(env, t.z, t.x, t.y);
 }
 
 export async function getCapabilities(c: Context<{ Bindings: Env }>): Promise<Response> {
@@ -76,61 +78,41 @@ export async function getCapabilities(c: Context<{ Bindings: Env }>): Promise<Re
     </Layer>
   </Capability>
 </WMT_MS_Capabilities>`;
-  return new Response(xml, { headers: { "content-type": "application/vnd.ogc.wms_xml;charset=utf-8" } });
+  return new Response(xml, {
+    headers: { "content-type": "application/vnd.ogc.wms_xml;charset=utf-8" },
+  });
 }
 
-async function serveTile(env: Env, z: number, x: number, y: number, color?: string, alpha?: string): Promise<Response> {
+/**
+ * Serve a tile from PMTiles, byte-for-byte canonical.
+ *
+ * - z < minZoom        → 204 (caller may render blank)
+ * - z > maxZoom        → 204 (caller does GPU upscale, e.g. MapLibre maxzoom + overscaledZ)
+ * - tile not present    → tiny transparent PNG
+ * - otherwise           → raw PNG bytes from PMTiles
+ *
+ * No query-string handling; cache key is just (z, x, y).
+ */
+export async function serveTile(env: Env, z: number, x: number, y: number): Promise<Response> {
   const pmt = getPMT(env);
   const header = await pmt.getHeader();
   if (header.tileType !== TileType.Png) return new Response("archive type not PNG", { status: 500 });
-  if (z < header.minZoom) return new Response(null, { status: 204 });
-
-  // Overzoom: client requested z > native maxZoom. Look up parent + remember
-  // which sub-region we need to extract.
-  let lookupZ = z, lookupX = x, lookupY = y;
-  let dz = 0, subX = 0, subY = 0;
-  if (z > header.maxZoom) {
-    dz = z - header.maxZoom;
-    lookupZ = header.maxZoom;
-    lookupX = x >> dz;
-    lookupY = y >> dz;
-    subX = x & ((1 << dz) - 1);
-    subY = y & ((1 << dz) - 1);
+  if (z < header.minZoom || z > header.maxZoom) {
+    return new Response(null, { status: 204 });
   }
-
-  const tile = await pmt.getZxy(lookupZ, lookupX, lookupY);
+  const tile = await pmt.getZxy(z, x, y);
   if (!tile) {
-    return new Response(blankPng(), {
-      headers: { "content-type": "image/png", "cache-control": env.CACHE_CONTROL || "public, max-age=86400" },
+    return new Response(blankPng() as unknown as BodyInit, {
+      headers: {
+        "content-type": "image/png",
+        "cache-control": env.CACHE_CONTROL || "public, max-age=31536000, immutable",
+      },
     });
   }
-  let raw: Uint8Array = new Uint8Array(tile.data);
-
-  // Pixel-perfect overzoom (nearest-neighbor sub-region upscale)
-  if (dz > 0) {
-    try {
-      raw = await overzoomTile(raw, dz, subX, subY);
-    } catch (e) {
-      // Fall through with parent tile as-is if decode fails
-      console.warn("overzoom failed", e);
-    }
-  }
-
-  // Recolor canonical mask to client-requested (color, alpha)
-  const useColor = color ?? env.TILE_COLOR;
-  const useAlpha = alpha ?? env.TILE_ALPHA;
-  const [r, g, b] = parseColorHex(useColor);
-  const a = clampAlpha(useAlpha);
-  let body: Uint8Array;
-  try {
-    body = recolorMaskPng(raw, r, g, b, a);
-  } catch {
-    body = raw;
-  }
-  return new Response(body as BodyInit, {
+  return new Response(tile.data, {
     headers: {
       "content-type": "image/png",
-      "cache-control": env.CACHE_CONTROL || "public, max-age=86400",
+      "cache-control": env.CACHE_CONTROL || "public, max-age=31536000, immutable",
     },
   });
 }
@@ -138,10 +120,7 @@ async function serveTile(env: Env, z: number, x: number, y: number, color?: stri
 let _blank: Uint8Array | undefined;
 function blankPng(): Uint8Array {
   if (_blank) return _blank;
-  // 256x256 fully transparent PNG, palette+tRNS, ~70 bytes (precomputed offline)
   const b64 = "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEAAQMAAABmvDolAAAAA1BMVEUAAACnej3aAAAAAXRSTlMAQObYZgAAAA9JREFUeF7twTEBAAAAwqD1T20PBwAAAAAAAAAAAAAAAAAAAACPHEEAAfEvVKEAAAAASUVORK5CYII=";
   _blank = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
   return _blank;
 }
-
-export { serveTile };

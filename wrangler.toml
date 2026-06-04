@@ -4,17 +4,20 @@ main = "src/index.ts"
 compatibility_date = "2026-06-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Static assets (preview HTML/CSS/JS). Served via env.ASSETS.fetch().
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "none"
+
 # Public configuration — override locally via `wrangler.toml` overrides or env
 [vars]
-TILE_COLOR = "2980b9"
-TILE_ALPHA = "153"
 PMTILES_KEY = "uom-shifei.pmtiles"
 DJI_KEY = "dji.geojson"
 ALLOWED_ORIGINS = "*"
-CACHE_CONTROL = "public, max-age=86400, s-maxage=604800"
+CACHE_CONTROL = "public, max-age=31536000, immutable"
 
 # R2 bucket binding. Bucket must be created by user via `wrangler r2 bucket create`.
-# Then upload pmtiles + dji via `bash scripts/upload.sh`.
 [[r2_buckets]]
 binding = "BUCKET"
 bucket_name = "uomtiles"
@@ -27,6 +30,9 @@ preview_bucket_name = "uomtiles-preview"
 pattern = "uom.zzi.su"
 custom_domain = true
 
+# TIANDITU_TOKEN is a SECRET, set via:
+#   wrangler secret put TIANDITU_TOKEN
+# It will appear as env.TIANDITU_TOKEN at runtime. NOT in this file.
+
 [observability]
 enabled = true
-
