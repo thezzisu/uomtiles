@@ -3,57 +3,89 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes">
-  <title>UOM 适飞空域预览</title>
+  <title>UOM 适飞空域</title>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css">
   <link rel="stylesheet" href="/preview.css">
 </head>
 <body>
   <div id="map"></div>
-  <div id="zlabel"></div>
 
-  <div id="search-wrap" class="hidden">
-    <span id="search-icon">🔍</span>
-    <input id="search-input" type="search" placeholder="搜索 POI (高德)" autocomplete="off">
+  <div id="search-wrap" class="hidden" data-collapsed="false">
+    <button id="search-icon" type="button" aria-label="搜索">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16.102 17.162a8 8 0 1 1 1.06-1.06l4.618 4.618a.75.75 0 1 1-1.06 1.06zM17.5 11a6.5 6.5 0 1 0-13 0a6.5 6.5 0 0 0 13 0"/></svg>
+    </button>
+    <input id="search-input" type="search" placeholder="搜索地点" autocomplete="off">
     <div id="search-results"></div>
   </div>
 
-  <div id="controls">
-    <div class="ctrl-head" id="ctrl-head"><span>设置</span><span class="toggle">▾</span></div>
-    <div class="ctrl-body">
-      <div>底图<div id="basemap-list"></div></div>
-      <label>透明度
-        <input type="range" id="uom-alpha" min="0" max="100" value="60">
-        <span id="alpha-val">60</span>%
-      </label>
-      <div>颜色<div id="color-swatches"></div></div>
-      <label><input type="checkbox" id="dji-toggle" checked> DJI 限飞</label>
-      <label><input type="checkbox" id="uom-toggle" checked> UOM 适飞</label>
-    </div>
-  </div>
+  <aside id="controls">
+    <header class="ctrl-head" id="ctrl-head">
+      <span class="title">图层</span>
+      <span class="chev" aria-hidden="true">
+        <svg viewBox="0 0 20 20" width="12" height="12" fill="currentColor"><path d="M15.854 7.646a.5.5 0 0 1 .001.707l-5.465 5.484a.55.55 0 0 1-.78 0L4.147 8.353a.5.5 0 1 1 .708-.706L10 12.812l5.147-5.165a.5.5 0 0 1 .707-.001"/></svg>
+      </span>
+    </header>
 
-  <div class="legend" id="legend">
-    <h4 id="legend-head"><span>图层说明</span><span class="toggle">▾</span></h4>
-    <div class="legend-body">
-      <p><span class="swatch" id="legend-uom-swatch" style="background:#2980b9"></span>UOM 适飞空域</p>
-      <p><span class="swatch" style="background:#ff6b6b"></span>DJI Restricted</p>
-      <p><span class="swatch" style="background:#feca57"></span>DJI Warning / Auth</p>
-      <p><span class="swatch" style="background:#48dbfb"></span>DJI Recommended</p>
-      <p style="font-size:10px;color:#aaa;margin-top:6px">底图自动纠偏到 WGS-84</p>
-    </div>
-  </div>
+    <div class="ctrl-body"><div class="inner">
 
-  <div id="settings-overlay">
+      <section class="section">
+        <h4 class="section-label">底图</h4>
+        <div id="basemap-list"></div>
+      </section>
+
+      <section class="section">
+        <h4 class="section-label">UOM 适飞</h4>
+        <label class="toggle-row">
+          <input type="checkbox" id="uom-toggle" checked>
+          <span class="check"></span>
+          <span class="lbl">显示</span>
+        </label>
+        <div class="slider-row">
+          <input type="range" id="uom-alpha" min="0" max="100" value="60">
+          <span class="val"><span id="alpha-val">60</span>%</span>
+        </div>
+        <div class="swatches" id="color-swatches"></div>
+      </section>
+
+      <section class="section">
+        <h4 class="section-label">DJI 限飞</h4>
+        <label class="toggle-row">
+          <input type="checkbox" id="dji-toggle" checked>
+          <span class="check"></span>
+          <span class="lbl">显示</span>
+        </label>
+        <div class="dji-legend">
+          <span style="--c:#ff6b6b">禁飞</span>
+          <span style="--c:#feca57">警告 / 授权</span>
+          <span style="--c:#48dbfb">推荐</span>
+        </div>
+      </section>
+
+      <section class="section">
+        <button class="link-btn" id="open-settings" type="button">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12.012 2.25c.734.008 1.465.093 2.182.253a.75.75 0 0 1 .582.649l.17 1.527a1.384 1.384 0 0 0 1.927 1.116l1.4-.615a.75.75 0 0 1 .85.174a9.8 9.8 0 0 1 2.205 3.792a.75.75 0 0 1-.272.825l-1.241.916a1.38 1.38 0 0 0 0 2.226l1.243.915a.75.75 0 0 1 .272.826a9.8 9.8 0 0 1-2.204 3.792a.75.75 0 0 1-.849.175l-1.406-.617a1.38 1.38 0 0 0-1.926 1.114l-.17 1.526a.75.75 0 0 1-.571.647a9.5 9.5 0 0 1-4.406 0a.75.75 0 0 1-.572-.647l-.169-1.524a1.382 1.382 0 0 0-1.925-1.11l-1.406.616a.75.75 0 0 1-.85-.175a9.8 9.8 0 0 1-2.203-3.796a.75.75 0 0 1 .272-.826l1.243-.916a1.38 1.38 0 0 0 0-2.226l-1.243-.914a.75.75 0 0 1-.272-.826a9.8 9.8 0 0 1 2.205-3.792a.75.75 0 0 1 .85-.174l1.4.615a1.387 1.387 0 0 0 1.93-1.118l.17-1.526a.75.75 0 0 1 .583-.65q1.074-.238 2.201-.252m0 1.5a9 9 0 0 0-1.354.117l-.11.977A2.886 2.886 0 0 1 6.526 7.17l-.899-.394A8.3 8.3 0 0 0 4.28 9.092l.797.587a2.88 2.88 0 0 1 .001 4.643l-.799.588c.32.842.776 1.626 1.348 2.322l.905-.397a2.882 2.882 0 0 1 4.017 2.318l.109.984c.89.15 1.799.15 2.688 0l.11-.984a2.88 2.88 0 0 1 4.018-2.322l.904.396a8.3 8.3 0 0 0 1.348-2.318l-.798-.588a2.88 2.88 0 0 1-.001-4.643l.797-.587a8.3 8.3 0 0 0-1.348-2.317l-.897.393a2.884 2.884 0 0 1-4.023-2.324l-.109-.976a9 9 0 0 0-1.334-.117M12 8.25a3.75 3.75 0 1 1 0 7.5a3.75 3.75 0 0 1 0-7.5m0 1.5a2.25 2.25 0 1 0 0 4.5a2.25 2.25 0 0 0 0-4.5"/></svg>
+          POI 搜索设置
+        </button>
+      </section>
+
+    </div></div>
+  </aside>
+
+  <div id="zlabel"></div>
+
+  <div id="settings-overlay" role="dialog" aria-modal="true">
     <div id="settings-panel">
-      <h3>POI 搜索设置</h3>
-      <p>需要高德 Web Service Key (免费, <a href="https://lbs.amap.com/api/webservice/create-project-and-key" target="_blank" rel="noopener">点此申请</a>). 创建应用 → 选择 <b>Web 服务</b>, 拿到 32 位 Key.</p>
-      <p>Key 仅存储在你浏览器 localStorage, 不上传服务端.</p>
-      <label style="font-size:12px;color:#bbb">高德 Web Service Key
-        <input id="amap-key-input" type="text" placeholder="例如 abcd1234...32位" autocomplete="off">
+      <h3>POI 搜索</h3>
+      <p>需要 高德 Web Service Key (免费，<a href="https://lbs.amap.com/api/webservice/create-project-and-key" target="_blank" rel="noopener">点此申请</a>)。创建应用 → 选择 <em>Web 服务</em>，复制 32 位 Key。</p>
+      <p class="dim">仅存储在浏览器 localStorage，不上传服务端。</p>
+      <label class="field">
+        <span>Key</span>
+        <input id="amap-key-input" type="text" placeholder="abcd1234… 32 位" autocomplete="off">
       </label>
       <div class="btns">
-        <button class="save" id="amap-key-save">保存</button>
-        <button class="clear" id="amap-key-clear">清除</button>
-        <button class="cancel" id="amap-key-cancel">取消</button>
+        <button class="btn-ghost" id="amap-key-clear" type="button">清除</button>
+        <button class="btn-ghost" id="amap-key-cancel" type="button">取消</button>
+        <button class="btn-primary" id="amap-key-save" type="button">保存</button>
       </div>
     </div>
   </div>

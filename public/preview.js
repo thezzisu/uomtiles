@@ -174,19 +174,19 @@ if (tdtVec) {
 }
 
 const basemaps = [
-  { id: "osm", name: "OSM (默认)", sources: ["osm"] },
-  { id: "cartoVoy", name: "CARTO Voyager", sources: ["cartoVoy"] },
-  { id: "cartoDark", name: "CARTO Dark", sources: ["cartoDark"] },
-  { id: "esriSat", name: "ESRI 卫星", sources: ["esriSat"] },
-  { id: "opentopo", name: "OpenTopo 地形", sources: ["opentopo"] },
-  { id: "amapVec", name: "高德矢量 (GCJ-02 自动纠偏)", sources: ["amapVec"] },
-  { id: "amapSat", name: "高德卫星 (GCJ-02 自动纠偏)", sources: ["amapSat", "amapSatAnno"] },
+  { id: "osm", name: "街道", provider: "OSM", sources: ["osm"] },
+  { id: "cartoVoy", name: "矢量", provider: "CARTO", sources: ["cartoVoy"] },
+  { id: "cartoDark", name: "暗色", provider: "CARTO", sources: ["cartoDark"] },
+  { id: "esriSat", name: "影像", provider: "ESRI", sources: ["esriSat"] },
+  { id: "opentopo", name: "地形", provider: "OpenTopo", sources: ["opentopo"] },
+  { id: "amapVec", name: "矢量", provider: "高德", sources: ["amapVec"] },
+  { id: "amapSat", name: "影像", provider: "高德", sources: ["amapSat", "amapSatAnno"] },
 ];
 if (TDT_TOKEN) {
   basemaps.push(
-    { id: "tdtVec", name: "天地图矢量", sources: ["tdtVec", "tdtVecAnno"] },
-    { id: "tdtSat", name: "天地图卫星", sources: ["tdtSat", "tdtSatAnno"] },
-    { id: "tdtTer", name: "天地图地形", sources: ["tdtTer", "tdtTerAnno"] },
+    { id: "tdtVec", name: "矢量", provider: "天地图", sources: ["tdtVec", "tdtVecAnno"] },
+    { id: "tdtSat", name: "影像", provider: "天地图", sources: ["tdtSat", "tdtSatAnno"] },
+    { id: "tdtTer", name: "地形", provider: "天地图", sources: ["tdtTer", "tdtTerAnno"] },
   );
 }
 
@@ -234,27 +234,6 @@ map.addControl(new maplibregl.GeolocateControl({
   showAccuracyCircle: true,
 }), "top-left");
 map.addControl(new maplibregl.ScaleControl({ maxWidth: 100, unit: "metric" }), "bottom-right");
-
-// Settings dialog button — custom control
-class SettingsControl {
-  onAdd(m) {
-    const div = document.createElement("div");
-    div.className = "maplibregl-ctrl maplibregl-ctrl-group";
-    const btn = document.createElement("button");
-    btn.title = "POI 搜索设置";
-    btn.innerHTML = "⚙";
-    btn.style.fontSize = "18px";
-    btn.addEventListener("click", () => {
-      document.getElementById("amap-key-input").value = getAmapKey();
-      document.getElementById("settings-overlay").classList.add("open");
-      setTimeout(() => document.getElementById("amap-key-input").focus(), 50);
-    });
-    div.appendChild(btn);
-    return div;
-  }
-  onRemove() {}
-}
-map.addControl(new SettingsControl(), "top-left");
 
 window.__uomState = { map, basemaps, sources, initialBasemapId: initial.id };
 window.__uomCoord = { wgs84ToGcj02, gcj02ToWgs84 };

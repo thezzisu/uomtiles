@@ -38,16 +38,14 @@ function colorToHueRotate(hex) {
   return ((hexToHue(hex) - SRC_HUE + 720) % 360);
 }
 
-// ---------- Basemap switcher ----------
+// ---------- Basemap matrix (provider rows × variant chips) ----------
 let currentBasemapId = initialBasemapId;
 function applyBasemap(id) {
   const cfg = basemaps.find(b => b.id === id);
   if (!cfg) return;
-  // Remove existing basemap layers
   map.getStyle().layers
     .filter(l => l.metadata && l.metadata.basemap)
     .forEach(l => map.removeLayer(l.id));
-  // Insert new ones BEFORE uom-overlay
   cfg.sources.forEach((src, i) => {
     map.addLayer(
       { id: "basemap-" + i, type: "raster", source: src, metadata: { basemap: true } },
@@ -55,39 +53,56 @@ function applyBasemap(id) {
     );
   });
   currentBasemapId = id;
+  document.querySelectorAll(".bm-row .chip").forEach(c => {
+    c.setAttribute("aria-pressed", c.dataset.id === id ? "true" : "false");
+  });
 }
 
 const basemapList = document.getElementById("basemap-list");
+const byProvider = new Map();
 basemaps.forEach(b => {
-  const lbl = document.createElement("label");
-  const inp = document.createElement("input");
-  inp.type = "radio";
-  inp.name = "basemap";
-  inp.value = b.id;
-  inp.checked = b.id === initialBasemapId;
-  inp.addEventListener("change", () => { if (inp.checked) applyBasemap(b.id); });
-  lbl.appendChild(inp);
-  lbl.appendChild(document.createTextNode(b.name));
-  basemapList.appendChild(lbl);
+  if (!byProvider.has(b.provider)) byProvider.set(b.provider, []);
+  byProvider.get(b.provider).push(b);
+});
+byProvider.forEach((items, provider) => {
+  const row = document.createElement("div");
+  row.className = "bm-row";
+  const lbl = document.createElement("span");
+  lbl.className = "label";
+  lbl.textContent = provider;
+  const chips = document.createElement("div");
+  chips.className = "chips";
+  items.forEach(it => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "chip";
+    btn.textContent = it.name;
+    btn.dataset.id = it.id;
+    btn.setAttribute("aria-pressed", it.id === initialBasemapId ? "true" : "false");
+    btn.addEventListener("click", () => applyBasemap(it.id));
+    chips.appendChild(btn);
+  });
+  row.appendChild(lbl);
+  row.appendChild(chips);
+  basemapList.appendChild(row);
 });
 
 // ---------- Color swatches + opacity ----------
 const swatchesEl = document.getElementById("color-swatches");
-const legendSwatch = document.getElementById("legend-uom-swatch");
 let activeColor = "#2980b9";
 function applyColor(hex) {
   activeColor = hex;
   const deg = colorToHueRotate(hex);
   if (map.getLayer("uom-overlay")) map.setPaintProperty("uom-overlay", "raster-hue-rotate", deg);
-  legendSwatch.style.background = hex;
-  swatchesEl.querySelectorAll(".swatch").forEach(s => s.classList.toggle("active", s.dataset.hex === hex));
+  swatchesEl.querySelectorAll("button").forEach(s => s.setAttribute("aria-pressed", s.dataset.hex === hex ? "true" : "false"));
 }
 COLOR_PRESETS.forEach(c => {
-  const s = document.createElement("div");
-  s.className = "swatch" + (c.hex === activeColor ? " active" : "");
-  s.style.background = c.hex;
+  const s = document.createElement("button");
+  s.type = "button";
   s.title = c.name;
   s.dataset.hex = c.hex;
+  s.style.color = c.hex;
+  s.setAttribute("aria-pressed", c.hex === activeColor ? "true" : "false");
   s.addEventListener("click", () => applyColor(c.hex));
   swatchesEl.appendChild(s);
 });
@@ -157,10 +172,8 @@ updateZ();
 
 // ---------- Panels collapse ----------
 const controls = document.getElementById("controls");
-const legend = document.getElementById("legend");
-if (isMobile) { controls.classList.add("collapsed"); legend.classList.add("collapsed"); }
+if (isMobile) controls.classList.add("collapsed");
 document.getElementById("ctrl-head").addEventListener("click", () => controls.classList.toggle("collapsed"));
-document.getElementById("legend-head").addEventListener("click", () => legend.classList.toggle("collapsed"));
 
 window.__uomApp = { applyBasemap, applyColor, applyAlpha, COLOR_PRESETS, colorToHueRotate };
 
@@ -169,10 +182,17 @@ const settingsOverlay = document.getElementById("settings-overlay");
 const keyInput = document.getElementById("amap-key-input");
 function getAmapKey() { return localStorage.getItem("uomtiles.amapKey") || ""; }
 function setAmapKey(k) { if (k) localStorage.setItem("uomtiles.amapKey", k); else localStorage.removeItem("uomtiles.amapKey"); refreshSearchVisibility(); }
+function openSettings() {
+  keyInput.value = getAmapKey();
+  settingsOverlay.classList.add("open");
+  setTimeout(() => keyInput.focus(), 50);
+}
+document.getElementById("open-settings").addEventListener("click", openSettings);
 document.getElementById("amap-key-save").addEventListener("click", () => { setAmapKey(keyInput.value.trim()); settingsOverlay.classList.remove("open"); });
 document.getElementById("amap-key-clear").addEventListener("click", () => { keyInput.value = ""; setAmapKey(""); settingsOverlay.classList.remove("open"); });
 document.getElementById("amap-key-cancel").addEventListener("click", () => settingsOverlay.classList.remove("open"));
 settingsOverlay.addEventListener("click", e => { if (e.target === settingsOverlay) settingsOverlay.classList.remove("open"); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") settingsOverlay.classList.remove("open"); });
 
 // ---------- POI search (Amap inputtips, client-side, key in localStorage) ----------
 const searchWrap = document.getElementById("search-wrap");
@@ -181,13 +201,13 @@ const searchResults = document.getElementById("search-results");
 const searchIcon = document.getElementById("search-icon");
 function refreshSearchVisibility() { searchWrap.classList.toggle("hidden", !getAmapKey()); }
 refreshSearchVisibility();
-if (isMobile) searchWrap.classList.add("collapsed");
+if (isMobile) searchWrap.dataset.collapsed = "true";
 searchIcon.addEventListener("click", () => {
-  if (searchWrap.classList.contains("collapsed")) {
-    searchWrap.classList.remove("collapsed");
+  if (searchWrap.dataset.collapsed === "true") {
+    searchWrap.dataset.collapsed = "false";
     setTimeout(() => searchInput.focus(), 50);
   } else if (!searchInput.value) {
-    searchWrap.classList.add("collapsed");
+    if (isMobile) searchWrap.dataset.collapsed = "true";
   }
 });
 
@@ -245,7 +265,7 @@ function pickResult(idx) {
     .addTo(map);
   searchMarker.togglePopup();
   searchResults.classList.remove("open");
-  if (isMobile) { searchInput.blur(); searchWrap.classList.add("collapsed"); }
+  if (isMobile) { searchInput.blur(); searchWrap.dataset.collapsed = "true"; }
 }
 searchInput.addEventListener("input", () => {
   clearTimeout(searchTimer);
