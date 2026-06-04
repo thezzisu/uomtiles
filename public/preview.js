@@ -225,7 +225,7 @@ const map = new maplibregl.Map({
   pitchWithRotate: false,
   dragRotate: false,
   touchPitch: false,
-  attributionControl: { compact: true },
+  attributionControl: false,
 });
 map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
 map.addControl(new maplibregl.GeolocateControl({
@@ -233,7 +233,38 @@ map.addControl(new maplibregl.GeolocateControl({
   trackUserLocation: false,
   showAccuracyCircle: true,
 }), "top-left");
-map.addControl(new maplibregl.ScaleControl({ maxWidth: 100, unit: "metric" }), "bottom-right");
+
+// Level chip — shows the integer XYZ z used by UOM (capped at 13).
+class LevelControl {
+  onAdd(m) {
+    const div = document.createElement("div");
+    div.className = "maplibregl-ctrl maplibregl-ctrl-group";
+    const cell = document.createElement("div");
+    cell.className = "level-chip";
+    cell.title = "当前请求层级 (UOM 最高 13)";
+    div.appendChild(cell);
+    this._cell = cell;
+    this._m = m;
+    this._update = () => {
+      const z = Math.max(0, Math.min(13, Math.round(m.getZoom())));
+      cell.textContent = String(z);
+    };
+    m.on("zoom", this._update);
+    m.on("zoomend", this._update);
+    this._update();
+    return div;
+  }
+  onRemove() {
+    if (this._m && this._update) {
+      this._m.off("zoom", this._update);
+      this._m.off("zoomend", this._update);
+    }
+  }
+}
+map.addControl(new LevelControl(), "top-left");
+
+map.addControl(new maplibregl.AttributionControl({ compact: false }), "bottom-left");
+map.addControl(new maplibregl.ScaleControl({ maxWidth: 90, unit: "metric" }), "bottom-left");
 
 window.__uomState = { map, basemaps, sources, initialBasemapId: initial.id };
 window.__uomCoord = { wgs84ToGcj02, gcj02ToWgs84 };

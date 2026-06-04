@@ -164,16 +164,84 @@ document.getElementById("dji-toggle").addEventListener("change", e => {
 });
 
 // ---------- Z label ----------
-const zlabel = document.getElementById("zlabel");
-function updateZ() { zlabel.textContent = "z=" + map.getZoom().toFixed(1); }
-map.on("zoom", updateZ);
-map.on("zoomend", updateZ);
-updateZ();
+// (handled by LevelControl in preview.js)
+
+// ---------- Theme cycle (system → light → dark → system) ----------
+const THEMES = ["system", "light", "dark"];
+function getTheme() { return localStorage.getItem("uomtiles.theme") || "system"; }
+function setTheme(t) {
+  localStorage.setItem("uomtiles.theme", t);
+  document.documentElement.dataset.theme = t;
+}
+const themeBtn = document.getElementById("theme-toggle");
+if (themeBtn) {
+  themeBtn.addEventListener("click", e => {
+    e.stopPropagation();
+    const cur = getTheme();
+    const next = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];
+    setTheme(next);
+  });
+}
 
 // ---------- Panels collapse ----------
 const controls = document.getElementById("controls");
+const ctrlHead = document.getElementById("ctrl-head");
 if (isMobile) controls.classList.add("collapsed");
-document.getElementById("ctrl-head").addEventListener("click", () => controls.classList.toggle("collapsed"));
+
+if (!isMobile) {
+  ctrlHead.addEventListener("click", e => {
+    if (e.target.closest(".ico-btn")) return;
+    controls.classList.toggle("collapsed");
+  });
+} else {
+  // Mobile: tap toggles, drag (down=close, up=open) with live transform preview.
+  let startY = 0, lastY = 0, dragging = false, moved = false, startCollapsed = false;
+  let onMove = null, onUp = null;
+
+  const onDown = e => {
+    if (e.target.closest(".ico-btn")) return;
+    startY = lastY = e.clientY;
+    dragging = true;
+    moved = false;
+    startCollapsed = controls.classList.contains("collapsed");
+    controls.style.transition = "none";
+    e.preventDefault();
+    onMove = ev => {
+      if (!dragging) return;
+      lastY = ev.clientY;
+      const dy = lastY - startY;
+      if (Math.abs(dy) > 4) moved = true;
+      if (!startCollapsed && dy > 0) {
+        controls.style.transform = `translateY(${Math.min(dy, controls.scrollHeight)}px)`;
+      } else if (startCollapsed && dy < 0) {
+        // Show a slight pull-up cue.
+        controls.style.transform = `translateY(${Math.max(dy, -40)}px)`;
+      }
+      ev.preventDefault();
+    };
+    onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      controls.style.transition = "";
+      controls.style.transform = "";
+      const dy = lastY - startY;
+      if (!moved) {
+        controls.classList.toggle("collapsed");
+      } else if (!startCollapsed && dy > 60) {
+        controls.classList.add("collapsed");
+      } else if (startCollapsed && dy < -30) {
+        controls.classList.remove("collapsed");
+      }
+      window.removeEventListener("pointermove", onMove, { passive: false });
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
+  ctrlHead.addEventListener("pointerdown", onDown);
+}
 
 window.__uomApp = { applyBasemap, applyColor, applyAlpha, COLOR_PRESETS, colorToHueRotate };
 

@@ -1,16 +1,60 @@
-:root{
-  --bg: oklch(0.16 0.008 250 / 0.86);
+/* ============ Theme tokens ============ */
+:root,
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg: oklch(0.18 0.008 250 / 0.86);
   --bg-modal: oklch(0.18 0.008 250 / 0.98);
-  --bg-elev: oklch(1 0 0 / 0.04);
-  --fg: oklch(0.94 0.005 250);
-  --fg-muted: oklch(0.70 0.01 250);
+  --bg-elev: oklch(1 0 0 / 0.05);
+  --fg: oklch(0.95 0.005 250);
+  --fg-muted: oklch(0.72 0.01 250);
   --fg-dim: oklch(0.55 0.01 250);
   --border: oklch(1 0 0 / 0.08);
-  --border-strong: oklch(1 0 0 / 0.14);
-  --accent: oklch(0.65 0.16 240);
-  --accent-soft: oklch(0.65 0.16 240 / 0.18);
-  --accent-fg: oklch(0.98 0.005 250);
-  --danger: oklch(0.68 0.20 25);
+  --border-strong: oklch(1 0 0 / 0.16);
+  --accent: oklch(0.68 0.16 240);
+  --accent-soft: oklch(0.68 0.16 240 / 0.18);
+  --accent-fg: oklch(0.99 0.005 250);
+  --shadow: 0 4px 16px oklch(0 0 0 / 0.4);
+  --halo: 0 0 2px #000, 0 0 4px oklch(0 0 0 / 0.7);
+  --halo-fg: #fff;
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg: oklch(1 0 0 / 0.92);
+  --bg-modal: oklch(0.99 0.002 250);
+  --bg-elev: oklch(0.92 0.005 250 / 0.6);
+  --fg: oklch(0.22 0.008 250);
+  --fg-muted: oklch(0.42 0.008 250);
+  --fg-dim: oklch(0.58 0.008 250);
+  --border: oklch(0.20 0 0 / 0.10);
+  --border-strong: oklch(0.20 0 0 / 0.18);
+  --accent: oklch(0.55 0.16 240);
+  --accent-soft: oklch(0.55 0.16 240 / 0.16);
+  --accent-fg: #fff;
+  --shadow: 0 4px 16px oklch(0 0 0 / 0.12);
+  --halo: 0 0 2px #fff, 0 0 4px oklch(1 0 0 / 0.7);
+  --halo-fg: #111;
+}
+@media (prefers-color-scheme: light){
+  :root[data-theme="system"]{
+    color-scheme:light;
+    --bg: oklch(1 0 0 / 0.92);
+    --bg-modal: oklch(0.99 0.002 250);
+    --bg-elev: oklch(0.92 0.005 250 / 0.6);
+    --fg: oklch(0.22 0.008 250);
+    --fg-muted: oklch(0.42 0.008 250);
+    --fg-dim: oklch(0.58 0.008 250);
+    --border: oklch(0.20 0 0 / 0.10);
+    --border-strong: oklch(0.20 0 0 / 0.18);
+    --accent: oklch(0.55 0.16 240);
+    --accent-soft: oklch(0.55 0.16 240 / 0.16);
+    --accent-fg: #fff;
+    --shadow: 0 4px 16px oklch(0 0 0 / 0.12);
+    --halo: 0 0 2px #fff, 0 0 4px oklch(1 0 0 / 0.7);
+    --halo-fg: #111;
+  }
+}
+
+:root{
   --radius: 8px;
   --radius-sm: 4px;
   --blur: blur(20px) saturate(1.3);
@@ -20,6 +64,9 @@
 html,body{height:100%;margin:0;background:oklch(0.10 0.005 250);color:var(--fg);
   font:13px/1.45 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
   font-feature-settings:"tnum" 1;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
+:root[data-theme="light"] body{background:oklch(0.96 0.005 250)}
+@media (prefers-color-scheme: light){:root[data-theme="system"] body{background:oklch(0.96 0.005 250)}}
+
 button,input,select{font:inherit;color:inherit;touch-action:manipulation}
 button{cursor:pointer}
 
@@ -29,7 +76,23 @@ button{cursor:pointer}
 .maplibregl-ctrl-group{
   background:var(--bg)!important;backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
   border:1px solid var(--border)!important;border-radius:var(--radius)!important;
-  box-shadow:0 1px 3px oklch(0 0 0 / 0.3)!important;overflow:hidden
+  box-shadow:var(--shadow)!important;overflow:hidden
+}
+/* Merge consecutive top-left groups into one visual stack */
+.maplibregl-ctrl-top-left .maplibregl-ctrl-group{margin:0!important}
+.maplibregl-ctrl-top-left .maplibregl-ctrl-group + .maplibregl-ctrl-group{
+  border-top:0!important;border-radius:0!important;margin-top:-1px!important
+}
+.maplibregl-ctrl-top-left .maplibregl-ctrl-group:not(:first-child):not(:last-child){border-radius:0!important}
+.maplibregl-ctrl-top-left .maplibregl-ctrl-group:first-child{
+  border-bottom-left-radius:0!important;border-bottom-right-radius:0!important
+}
+.maplibregl-ctrl-top-left .maplibregl-ctrl-group:last-child{
+  border-top-left-radius:0!important;border-top-right-radius:0!important
+}
+.maplibregl-ctrl-top-left .maplibregl-ctrl-group:only-child{border-radius:var(--radius)!important}
+.maplibregl-ctrl-top-left .maplibregl-ctrl-group + .maplibregl-ctrl-group > *:first-child{
+  border-top:1px solid var(--border)!important
 }
 .maplibregl-ctrl-group button{
   width:32px!important;height:32px!important;background:transparent!important;
@@ -37,29 +100,65 @@ button{cursor:pointer}
 }
 .maplibregl-ctrl-group button+button{border-top:1px solid var(--border)!important}
 .maplibregl-ctrl-group button:hover{background:var(--bg-elev)!important;color:var(--fg)!important}
-.maplibregl-ctrl-icon{filter:invert(.85)}
-.maplibregl-ctrl-attrib{
-  background:var(--bg)!important;backdrop-filter:var(--blur);
-  border:1px solid var(--border)!important;border-radius:var(--radius)!important;
-  font-size:9.5px!important;padding:2px 6px!important
+.maplibregl-ctrl-icon{filter:none}
+:root[data-theme="dark"] .maplibregl-ctrl-icon{filter:invert(.9)}
+@media (prefers-color-scheme: dark){:root[data-theme="system"] .maplibregl-ctrl-icon{filter:invert(.9)}}
+
+/* level chip — non-interactive cell in nav stack */
+.maplibregl-ctrl-group .level-chip{
+  width:32px!important;height:32px!important;
+  display:flex;align-items:center;justify-content:center;
+  font:600 12px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  font-variant-numeric:tabular-nums;
+  color:var(--fg)!important;cursor:default!important;
+  background:transparent!important
 }
-.maplibregl-ctrl-attrib a{color:var(--fg-muted)!important}
+.maplibregl-ctrl-group .level-chip:hover{background:transparent!important;color:var(--fg)!important}
+
+/* Naked scale: white-on-anything with halo */
 .maplibregl-ctrl-scale{
-  background:var(--bg)!important;backdrop-filter:var(--blur);
-  color:var(--fg-muted)!important;font-size:10px!important;
-  border:1px solid var(--border)!important;border-top:0!important;
-  padding:2px 6px!important
+  background:transparent!important;backdrop-filter:none;
+  color:var(--halo-fg)!important;font-weight:700!important;font-size:11.5px!important;
+  text-shadow:var(--halo);
+  border:0!important;border-bottom:2px solid var(--halo-fg)!important;
+  border-left:2px solid var(--halo-fg)!important;border-right:2px solid var(--halo-fg)!important;
+  border-radius:0!important;padding:1px 5px 2px!important;
+  margin:0 0 6px 8px!important;box-shadow:none!important;
+  font-variant-numeric:tabular-nums;
+  filter:drop-shadow(0 0 1px #0008)
 }
 
-/* ============ Z label ============ */
-#zlabel{
-  position:absolute;left:8px;bottom:30px;z-index:5;
-  padding:3px 8px;background:var(--bg);backdrop-filter:var(--blur);
-  border:1px solid var(--border);border-radius:var(--radius-sm);
-  color:var(--fg-muted);
-  font:11px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-  font-variant-numeric:tabular-nums;pointer-events:none
+/* Attribution: plain inline text, no compact (i) */
+.maplibregl-ctrl-attrib{
+  background:transparent!important;border:0!important;box-shadow:none!important;
+  font-size:9.5px!important;padding:0 8px!important;
+  color:var(--halo-fg)!important;
+  text-shadow:var(--halo);
+  margin:0 0 4px 0!important
 }
+.maplibregl-ctrl-attrib a{color:var(--halo-fg)!important;text-decoration:none;opacity:.85}
+.maplibregl-ctrl-attrib a:hover{opacity:1;text-decoration:underline}
+.maplibregl-ctrl-attrib-button{display:none!important}
+.maplibregl-ctrl-attrib-inner{display:inline!important}
+
+/* ============ Popup ============ */
+.maplibregl-popup-content{
+  background:var(--bg)!important;backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+  color:var(--fg)!important;
+  border:1px solid var(--border)!important;border-radius:var(--radius)!important;
+  box-shadow:var(--shadow)!important;
+  font-size:12px;padding:10px 14px!important
+}
+.maplibregl-popup-content b{font-weight:600}
+.maplibregl-popup-tip{
+  border-top-color:var(--bg)!important;border-bottom-color:var(--bg)!important;
+  filter:drop-shadow(0 1px 2px oklch(0 0 0 / 0.2))
+}
+.maplibregl-popup-close-button{
+  color:var(--fg-muted)!important;font-size:18px!important;
+  padding:2px 8px!important;background:transparent!important
+}
+.maplibregl-popup-close-button:hover{color:var(--fg)!important;background:var(--bg-elev)!important}
 
 /* ============ Search bar ============ */
 #search-wrap{
@@ -68,7 +167,7 @@ button{cursor:pointer}
   display:flex;align-items:center;
   background:var(--bg);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
   border:1px solid var(--border);border-radius:var(--radius);
-  padding:0 10px;height:36px;
+  padding:0 10px;height:36px;box-shadow:var(--shadow);
   transition:border-color .15s
 }
 #search-wrap.hidden{display:none}
@@ -87,8 +186,7 @@ button{cursor:pointer}
   position:absolute;top:calc(100% + 4px);left:0;right:0;
   background:var(--bg-modal);backdrop-filter:var(--blur);
   border:1px solid var(--border);border-radius:var(--radius);
-  max-height:60vh;overflow:auto;display:none;
-  box-shadow:0 4px 16px oklch(0 0 0 / 0.4)
+  max-height:60vh;overflow:auto;display:none;box-shadow:var(--shadow)
 }
 #search-results.open{display:block}
 #search-results .item{padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border)}
@@ -101,15 +199,14 @@ button{cursor:pointer}
 /* ============ Controls panel ============ */
 #controls{
   position:absolute;top:8px;right:8px;z-index:5;
-  width:252px;                                /* FIXED — collapse never changes width */
+  width:252px;
   background:var(--bg);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
   border:1px solid var(--border);border-radius:var(--radius);
-  box-shadow:0 4px 16px oklch(0 0 0 / 0.3);
-  overflow:hidden;
+  box-shadow:var(--shadow);overflow:hidden
 }
 #controls .ctrl-head{
   display:flex;align-items:center;justify-content:space-between;
-  padding:9px 14px;cursor:pointer;user-select:none;
+  padding:9px 10px 9px 14px;cursor:pointer;user-select:none;
   border-bottom:1px solid transparent;transition:border-color .2s
 }
 #controls:not(.collapsed) .ctrl-head{border-bottom-color:var(--border)}
@@ -117,8 +214,23 @@ button{cursor:pointer}
   font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
   color:var(--fg-muted)
 }
-#controls .ctrl-head .chev{color:var(--fg-muted);display:flex;transition:transform .25s ease-out}
+#controls .ctrl-head .actions{display:flex;align-items:center;gap:2px}
+#controls .ctrl-head .chev{color:var(--fg-muted);display:flex;transition:transform .25s ease-out;padding:4px}
 #controls.collapsed .ctrl-head .chev{transform:rotate(-90deg)}
+
+.ico-btn{
+  background:transparent;border:0;padding:6px;border-radius:var(--radius-sm);
+  display:inline-flex;align-items:center;justify-content:center;color:var(--fg-muted);
+  transition:color .15s,background .15s
+}
+.ico-btn:hover{color:var(--fg);background:var(--bg-elev)}
+
+/* theme cycle: show only the icon matching current data-theme */
+.theme-toggle .theme-ico{display:none}
+:root[data-theme="system"] .theme-toggle .theme-system{display:block}
+:root[data-theme="light"] .theme-toggle .theme-light{display:block}
+:root[data-theme="dark"] .theme-toggle .theme-dark{display:block}
+
 #controls .ctrl-body{
   display:grid;grid-template-rows:1fr;
   transition:grid-template-rows .25s ease-out
@@ -142,34 +254,29 @@ button{cursor:pointer}
 .bm-row .label{font-size:11px;color:var(--fg-muted);letter-spacing:.01em}
 .bm-row .chips{display:flex;flex-wrap:wrap;gap:4px}
 .chip{
-  font:11px/1 inherit;padding:5px 9px;
-  border-radius:4px;border:1px solid var(--border);
-  background:transparent;color:var(--fg-muted);
+  font:11px/1 inherit;padding:5px 9px;border-radius:4px;
+  border:1px solid var(--border);background:transparent;color:var(--fg-muted);
   transition:color .12s,border-color .12s,background .12s
 }
 .chip:hover{color:var(--fg);border-color:var(--border-strong)}
 .chip[aria-pressed=true]{
-  background:var(--accent);border-color:var(--accent);color:var(--accent-fg);
-  font-weight:500
+  background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:500
 }
 
 /* toggle switch */
-.toggle-row{
-  display:flex;align-items:center;gap:9px;cursor:pointer;
-  padding:4px 0;font-size:12px;color:var(--fg)
-}
+.toggle-row{display:flex;align-items:center;gap:9px;cursor:pointer;padding:4px 0;font-size:12px;color:var(--fg)}
 .toggle-row input{position:absolute;opacity:0;pointer-events:none}
 .toggle-row .check{
-  width:26px;height:14px;border-radius:7px;
-  background:var(--border-strong);position:relative;flex-shrink:0;
-  transition:background .2s
+  width:26px;height:14px;border-radius:7px;background:var(--border-strong);
+  position:relative;flex-shrink:0;transition:background .2s
 }
 .toggle-row .check::after{
-  content:"";width:10px;height:10px;border-radius:50%;background:var(--fg);
-  position:absolute;top:2px;left:2px;transition:left .2s
+  content:"";width:10px;height:10px;border-radius:50%;background:var(--bg-modal);
+  position:absolute;top:2px;left:2px;transition:left .2s;
+  box-shadow:0 1px 2px oklch(0 0 0 / 0.3)
 }
 .toggle-row input:checked + .check{background:var(--accent)}
-.toggle-row input:checked + .check::after{left:14px}
+.toggle-row input:checked + .check::after{left:14px;background:#fff}
 .toggle-row .lbl{flex:1}
 
 /* slider */
@@ -183,8 +290,7 @@ button{cursor:pointer}
   background:var(--fg);cursor:pointer;border:0;transition:transform .1s
 }
 .slider-row input[type=range]::-moz-range-thumb{
-  width:13px;height:13px;border-radius:50%;background:var(--fg);
-  cursor:pointer;border:0;transition:transform .1s
+  width:13px;height:13px;border-radius:50%;background:var(--fg);cursor:pointer;border:0
 }
 .slider-row input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 .slider-row .val{font-size:11px;color:var(--fg-muted);min-width:34px;text-align:right;
@@ -244,15 +350,13 @@ button{cursor:pointer}
   text-transform:uppercase;color:var(--fg-dim)}
 #settings-panel .field input{
   width:100%;padding:9px 11px;
-  border:1px solid var(--border-strong);background:oklch(0.10 0.005 250 / 0.5);
+  border:1px solid var(--border-strong);background:var(--bg-elev);
   color:var(--fg);border-radius:var(--radius-sm);outline:none;
   font:12px ui-monospace,"SF Mono",Menlo,Consolas,monospace
 }
 #settings-panel .field input:focus{border-color:var(--accent)}
 #settings-panel .btns{display:flex;gap:8px;margin-top:18px}
-#settings-panel button{
-  padding:8px 14px;border-radius:var(--radius-sm);font-size:12px;border:0
-}
+#settings-panel button{padding:8px 14px;border-radius:var(--radius-sm);font-size:12px;border:0}
 .btn-primary{background:var(--accent);color:var(--accent-fg);font-weight:500;margin-left:auto}
 .btn-primary:hover{filter:brightness(1.1)}
 .btn-ghost{background:transparent;color:var(--fg-muted);border:1px solid var(--border-strong)}
@@ -260,13 +364,51 @@ button{cursor:pointer}
 
 /* ============ Mobile ============ */
 @media (max-width: 640px){
-  #controls{
-    top:auto;bottom:8px;right:8px;left:8px;
-    width:auto;max-height:calc(100vh - 100px);overflow-y:auto
+  /* Search bar: shifted right of nav stack to avoid overlap */
+  #search-wrap{
+    left:54px;right:8px;top:8px;transform:none;width:auto;
+    max-width:none
   }
-  #search-wrap{left:8px;right:8px;top:8px;transform:none;width:auto}
-  #search-wrap[data-collapsed=true]{width:36px;padding:0}
+  #search-wrap[data-collapsed=true]{
+    left:auto;right:8px;width:36px;padding:0
+  }
   #search-wrap[data-collapsed=true] input{display:none}
-  .maplibregl-ctrl-group button{width:36px!important;height:36px!important}
-  #zlabel{font-size:10px}
+
+  /* Controls become a bottom sheet */
+  #controls{
+    top:auto;bottom:0;right:0;left:0;width:auto;
+    border:1px solid var(--border);border-bottom:0;
+    border-radius:14px 14px 0 0;
+    box-shadow:0 -4px 24px oklch(0 0 0 / 0.45);
+    max-height:75vh;display:flex;flex-direction:column
+  }
+  #controls .ctrl-head{
+    position:relative;justify-content:space-between;padding:14px 14px 10px;
+    border-bottom:1px solid transparent;
+    touch-action:none;
+    -webkit-user-select:none;user-select:none
+  }
+  #controls:not(.collapsed) .ctrl-head{border-bottom-color:var(--border)}
+  #controls .ctrl-head::before{
+    content:"";position:absolute;top:6px;left:50%;transform:translateX(-50%);
+    width:36px;height:4px;border-radius:2px;background:var(--border-strong);
+    transition:background .15s
+  }
+  #controls .ctrl-head:active::before{background:var(--fg-muted)}
+  #controls .ctrl-head .title{font-size:12.5px}
+  #controls .ctrl-head .chev{display:none}
+  #controls .ctrl-body{overflow:hidden}
+  #controls .ctrl-body .inner{overflow-y:auto;max-height:calc(75vh - 44px)}
+
+  /* Bigger touch targets on nav controls */
+  .maplibregl-ctrl-group button{width:38px!important;height:38px!important}
+  .maplibregl-ctrl-group .level-chip{width:38px!important;height:38px!important;font-size:13px}
+
+  /* Scale + attribution: float ABOVE the bottom-sheet drawer head (~44px) */
+  .maplibregl-ctrl-bottom-left{bottom:50px!important;pointer-events:none}
+  .maplibregl-ctrl-bottom-left > *{pointer-events:auto}
+  .maplibregl-ctrl-scale{font-size:11px!important}
+
+  /* Hide scale/attrib when drawer expanded */
+  body:has(#controls:not(.collapsed)) .maplibregl-ctrl-bottom-left{opacity:0;pointer-events:none}
 }
