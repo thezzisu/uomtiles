@@ -190,12 +190,23 @@ if (TDT_TOKEN) {
   );
 }
 
-// Initial style: only OSM as basemap; UOM overlay; DJI added after fetch.
+// Initial style: background fallback + OSM basemap; UOM overlay; DJI added after fetch.
 const initial = basemaps[0];
+function bgColorForTheme() {
+  const dt = document.documentElement.dataset.theme;
+  let isLight = dt === "light";
+  if (dt === "system") isLight = window.matchMedia("(prefers-color-scheme: light)").matches;
+  return isLight ? "#e8eaee" : "#1a1d22";
+}
 const style = {
   version: 8,
   sources,
   layers: [
+    {
+      id: "bg-fallback",
+      type: "background",
+      paint: { "background-color": bgColorForTheme() },
+    },
     ...initial.sources.map((s, i) => ({
       id: "basemap-" + i,
       type: "raster",
@@ -210,6 +221,7 @@ const style = {
         "raster-opacity": 0.6,
         "raster-hue-rotate": 0,
         "raster-resampling": "nearest",
+        "raster-fade-duration": 0,
       },
     },
   ],
@@ -268,6 +280,7 @@ map.addControl(new maplibregl.ScaleControl({ maxWidth: 90, unit: "metric" }), "b
 
 window.__uomState = { map, basemaps, sources, initialBasemapId: initial.id };
 window.__uomCoord = { wgs84ToGcj02, gcj02ToWgs84 };
+window.__uomTheme = { bgColorForTheme };
 
 // ===== Bootstrap continues in preview-app.js =====
 function getAmapKey() { return localStorage.getItem("uomtiles.amapKey") || ""; }

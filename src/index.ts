@@ -64,6 +64,20 @@ app.get("/dji.geojson", async c => {
   });
 });
 
+// Raw pmtiles download for offline mode.
+app.get("/uom-shifei.pmtiles", async c => {
+  const key = c.env.PMTILES_KEY || "uom-shifei.pmtiles";
+  const obj = await c.env.BUCKET.get(key);
+  if (!obj) return c.json({ error: "pmtiles not in R2" }, 404);
+  return new Response(obj.body, {
+    headers: {
+      "content-type": "application/octet-stream",
+      "content-length": String(obj.size),
+      "cache-control": "public, max-age=86400",
+    },
+  });
+});
+
 app.get("/health", c => c.json({ ok: true, ts: Date.now() }));
 
 // Fallback: try static assets (e.g. /preview.css, /preview.js, /preview-app.js)

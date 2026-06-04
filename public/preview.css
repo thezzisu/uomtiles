@@ -16,6 +16,7 @@
   --shadow: 0 4px 16px oklch(0 0 0 / 0.4);
   --halo: 0 0 2px #000, 0 0 4px oklch(0 0 0 / 0.7);
   --halo-fg: #fff;
+  --danger: oklch(0.65 0.20 25);
 }
 :root[data-theme="light"]{
   color-scheme:light;
@@ -238,6 +239,11 @@ button{cursor:pointer}
 #controls.collapsed .ctrl-body{grid-template-rows:0fr}
 #controls .ctrl-body .inner{overflow:hidden;min-height:0}
 
+/* Suppress initial transition on first paint (set via inline script). */
+#controls.init-no-transition,
+#controls.init-no-transition .ctrl-body,
+#controls.init-no-transition .ctrl-head{transition:none!important}
+
 .section{padding:12px 14px}
 .section+.section{border-top:1px solid var(--border)}
 .section-label{
@@ -325,6 +331,33 @@ button{cursor:pointer}
 }
 .link-btn:hover{color:var(--fg)}
 .link-btn svg{flex-shrink:0;opacity:.85}
+
+/* offline section */
+.offline-status{font-size:11.5px;color:var(--fg-muted);margin-bottom:8px;line-height:1.5}
+.offline-status .ok{color:var(--accent);font-weight:500;font-variant-numeric:tabular-nums}
+.offline-status .err{color:var(--danger,#e85a4a)}
+.offline-progress{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.offline-progress.hidden{display:none}
+.offline-progress .bar{
+  flex:1;height:4px;background:var(--border-strong);border-radius:2px;overflow:hidden
+}
+.offline-progress .fill{
+  height:100%;background:var(--accent);
+  transition:width .2s linear;width:0
+}
+.offline-progress .pct{
+  font:11px ui-monospace,Menlo,Consolas,monospace;color:var(--fg-muted);
+  font-variant-numeric:tabular-nums;min-width:34px;text-align:right
+}
+.offline-buttons{display:flex;flex-wrap:wrap;gap:6px 12px}
+.btn-link{
+  background:transparent;border:0;padding:4px 0;
+  color:var(--accent);font-size:11.5px;cursor:pointer
+}
+.btn-link:hover{filter:brightness(1.15)}
+.btn-link.warn{color:var(--danger,#e85a4a)}
+.btn-link.hidden{display:none}
+.btn-link:disabled{opacity:.5;cursor:wait}
 
 /* settings modal */
 #settings-overlay{

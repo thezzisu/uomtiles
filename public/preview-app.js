@@ -41,17 +41,21 @@ function colorToHueRotate(hex) {
 // ---------- Basemap matrix (provider rows × variant chips) ----------
 let currentBasemapId = initialBasemapId;
 function applyBasemap(id) {
-  const cfg = basemaps.find(b => b.id === id);
-  if (!cfg) return;
+  // Always remove existing basemap layers (id=null leaves us with bg-fallback only).
   map.getStyle().layers
     .filter(l => l.metadata && l.metadata.basemap)
     .forEach(l => map.removeLayer(l.id));
-  cfg.sources.forEach((src, i) => {
-    map.addLayer(
-      { id: "basemap-" + i, type: "raster", source: src, metadata: { basemap: true } },
-      "uom-overlay",
-    );
-  });
+  if (id) {
+    const cfg = basemaps.find(b => b.id === id);
+    if (cfg) {
+      cfg.sources.forEach((src, i) => {
+        map.addLayer(
+          { id: "basemap-" + i, type: "raster", source: src, metadata: { basemap: true } },
+          "uom-overlay",
+        );
+      });
+    }
+  }
   currentBasemapId = id;
   document.querySelectorAll(".bm-row .chip").forEach(c => {
     c.setAttribute("aria-pressed", c.dataset.id === id ? "true" : "false");
@@ -79,7 +83,10 @@ byProvider.forEach((items, provider) => {
     btn.textContent = it.name;
     btn.dataset.id = it.id;
     btn.setAttribute("aria-pressed", it.id === initialBasemapId ? "true" : "false");
-    btn.addEventListener("click", () => applyBasemap(it.id));
+    btn.addEventListener("click", () => {
+      const isSelected = btn.getAttribute("aria-pressed") === "true";
+      applyBasemap(isSelected ? null : it.id);
+    });
     chips.appendChild(btn);
   });
   row.appendChild(lbl);
@@ -125,9 +132,15 @@ document.getElementById("uom-toggle").addEventListener("change", e => {
 let djiVisible = true;
 async function loadDji() {
   try {
-    const res = await fetch("/dji.geojson");
-    if (!res.ok) return;
-    const data = await res.json();
+    let data;
+    if (window.__uomOffline) {
+      data = await window.__uomOffline.getCachedDji().catch(() => null);
+    }
+    if (!data) {
+      const res = await fetch("/dji.geojson");
+      if (!res.ok) return;
+      data = await res.json();
+    }
     if (!map.getSource("dji")) map.addSource("dji", { type: "geojson", data });
     const fillSpec = ["match", ["get", "type"], "restricted", "#ff6b6b", "warning", "#feca57", "auth", "#feca57", "recommended", "#48dbfb", "#888"];
     const opacitySpec = ["match", ["get", "type"], "restricted", 0.20, "warning", 0.15, "auth", 0.15, "recommended", 0.10, 0.10];
@@ -169,9 +182,14 @@ document.getElementById("dji-toggle").addEventListener("change", e => {
 // ---------- Theme cycle (system → light → dark → system) ----------
 const THEMES = ["system", "light", "dark"];
 function getTheme() { return localStorage.getItem("uomtiles.theme") || "system"; }
+function applyBgColor() {
+  const c = window.__uomTheme && window.__uomTheme.bgColorForTheme();
+  if (c && map.getLayer("bg-fallback")) map.setPaintProperty("bg-fallback", "background-color", c);
+}
 function setTheme(t) {
   localStorage.setItem("uomtiles.theme", t);
   document.documentElement.dataset.theme = t;
+  applyBgColor();
 }
 const themeBtn = document.getElementById("theme-toggle");
 if (themeBtn) {
@@ -182,11 +200,16 @@ if (themeBtn) {
     setTheme(next);
   });
 }
+// React to OS-level theme change when in "system" mode
+window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => {
+  if (getTheme() === "system") applyBgColor();
+});
 
 // ---------- Panels collapse ----------
 const controls = document.getElementById("controls");
 const ctrlHead = document.getElementById("ctrl-head");
-if (isMobile) controls.classList.add("collapsed");
+const ctrlBody = document.querySelector("#controls .ctrl-body");
+// Initial collapsed state is set via inline script in preview.html (FOUC-free).
 
 if (!isMobile) {
   ctrlHead.addEventListener("click", e => {
@@ -194,56 +217,215 @@ if (!isMobile) {
     controls.classList.toggle("collapsed");
   });
 } else {
-  // Mobile: tap toggles, drag (down=close, up=open) with live transform preview.
-  let startY = 0, lastY = 0, dragging = false, moved = false, startCollapsed = false;
-  let onMove = null, onUp = null;
+  // Mobile drawer drag (only via .ctrl-head):
+  //  - During drag: temporarily expand (no transition) so head+body move as one unit.
+  //  - On release: clean up transform, let CSS class transition (grid-rows) animate.
+  let dragState = null;
 
-  const onDown = e => {
+  ctrlHead.addEventListener("pointerdown", e => {
     if (e.target.closest(".ico-btn")) return;
-    startY = lastY = e.clientY;
-    dragging = true;
-    moved = false;
-    startCollapsed = controls.classList.contains("collapsed");
-    controls.style.transition = "none";
     e.preventDefault();
-    onMove = ev => {
-      if (!dragging) return;
-      lastY = ev.clientY;
-      const dy = lastY - startY;
-      if (Math.abs(dy) > 4) moved = true;
-      if (!startCollapsed && dy > 0) {
-        controls.style.transform = `translateY(${Math.min(dy, controls.scrollHeight)}px)`;
-      } else if (startCollapsed && dy < 0) {
-        // Show a slight pull-up cue.
-        controls.style.transform = `translateY(${Math.max(dy, -40)}px)`;
-      }
-      ev.preventDefault();
+    e.stopPropagation();
+
+    const startCollapsed = controls.classList.contains("collapsed");
+
+    // Disable all transitions for drag.
+    controls.style.transition = "none";
+    ctrlBody.style.transition = "none";
+
+    // If starting collapsed, expand instantly so we can drag the full sheet,
+    // then offset it by bodyHeight so it visually still looks collapsed.
+    if (startCollapsed) controls.classList.remove("collapsed");
+    void controls.offsetHeight; // force reflow
+    const bodyH = ctrlBody.offsetHeight;
+    if (startCollapsed) controls.style.transform = `translateY(${bodyH}px)`;
+    void controls.offsetHeight;
+
+    dragState = {
+      startY: e.clientY,
+      lastY: e.clientY,
+      startTime: Date.now(),
+      moved: false,
+      startCollapsed,
+      bodyH,
     };
-    onUp = () => {
-      if (!dragging) return;
-      dragging = false;
-      controls.style.transition = "";
-      controls.style.transform = "";
+
+    const onMove = ev => {
+      if (!dragState) return;
+      ev.preventDefault();
+      dragState.lastY = ev.clientY;
+      const dy = dragState.lastY - dragState.startY;
+      if (Math.abs(dy) > 4) dragState.moved = true;
+
+      const baseOffset = dragState.startCollapsed ? dragState.bodyH : 0;
+      const translate = Math.min(dragState.bodyH, Math.max(0, baseOffset + dy));
+      controls.style.transform = `translateY(${translate}px)`;
+    };
+
+    const onUp = () => {
+      if (!dragState) return;
+      const { startY, lastY, startTime, moved, startCollapsed, bodyH } = dragState;
+      dragState = null;
+
       const dy = lastY - startY;
-      if (!moved) {
-        controls.classList.toggle("collapsed");
-      } else if (!startCollapsed && dy > 60) {
-        controls.classList.add("collapsed");
-      } else if (startCollapsed && dy < -30) {
-        controls.classList.remove("collapsed");
+      const dt = Date.now() - startTime || 1;
+      const velocity = dy / dt;
+      const fastFlick = Math.abs(velocity) > 0.5;
+
+      let finalCollapsed;
+      if (!moved && !fastFlick) {
+        finalCollapsed = !startCollapsed;
+      } else if (startCollapsed) {
+        finalCollapsed = !(dy < -30 || (fastFlick && velocity < 0));
+      } else {
+        finalCollapsed = (dy > 60 || (fastFlick && velocity > 0));
       }
+
+      // Two-phase animation to eliminate flicker:
+      //  1. Animate transform to its final visual position (no class change yet).
+      //  2. After the transform animation ends, snap class + clear transform
+      //     atomically with NO transition — body height changes invisibly.
+      const targetTranslate = finalCollapsed ? bodyH : 0;
+      controls.style.transition = "transform .22s cubic-bezier(.2,.8,.2,1)";
+      controls.style.transform = `translateY(${targetTranslate}px)`;
+
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        controls.removeEventListener("transitionend", onTrans);
+        // Freeze all transitions during the swap.
+        controls.style.transition = "none";
+        ctrlBody.style.transition = "none";
+        controls.classList.toggle("collapsed", finalCollapsed);
+        controls.style.transform = "";
+        // Force reflow so the class change takes effect at the frozen state.
+        void controls.offsetHeight;
+        // Restore transitions on next frame so future toggles animate.
+        requestAnimationFrame(() => {
+          controls.style.transition = "";
+          ctrlBody.style.transition = "";
+        });
+      };
+      const onTrans = ev => {
+        if (ev.propertyName !== "transform") return;
+        finish();
+      };
+      controls.addEventListener("transitionend", onTrans);
+      setTimeout(finish, 260); // safety fallback
+
       window.removeEventListener("pointermove", onMove, { passive: false });
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
+
     window.addEventListener("pointermove", onMove, { passive: false });
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
-  };
-  ctrlHead.addEventListener("pointerdown", onDown);
+  });
 }
 
 window.__uomApp = { applyBasemap, applyColor, applyAlpha, COLOR_PRESETS, colorToHueRotate };
+
+// ---------- Offline / PWA ----------
+(function(){
+  const off = window.__uomOffline;
+  if (!off) return;
+
+  const statusEl = document.getElementById("offline-status");
+  const progEl = document.getElementById("offline-progress");
+  const barEl = document.getElementById("offline-bar");
+  const pctEl = document.getElementById("offline-pct");
+  const btnDl = document.getElementById("offline-download");
+  const btnPurge = document.getElementById("offline-purge");
+  const btnInstall = document.getElementById("offline-install");
+
+  function fmt(bytes) {
+    if (!bytes) return "0";
+    if (bytes >= 1024*1024) return (bytes / 1024 / 1024).toFixed(1) + " MB";
+    return (bytes / 1024).toFixed(0) + " KB";
+  }
+
+  async function refresh() {
+    const s = await off.getStatus();
+    if (s.installed) {
+      statusEl.innerHTML = `已下载 <span class="ok">${fmt(s.pmtilesSize)}</span>`;
+      btnDl.classList.add("hidden");
+      btnPurge.classList.remove("hidden");
+    } else {
+      statusEl.textContent = "未下载（在线模式）";
+      btnDl.classList.remove("hidden");
+      btnPurge.classList.add("hidden");
+    }
+  }
+
+  async function swapToOfflineSources() {
+    if (window.__uomOfflinePM) {
+      const newSrc = { type: "raster", url: "pmtiles://uom-pmtiles", tileSize: 256, attribution: "UOM 适飞" };
+      const layers = map.getStyle().layers.filter(l => l.source === "uom").map(l => ({...l}));
+      layers.forEach(l => map.getLayer(l.id) && map.removeLayer(l.id));
+      if (map.getSource("uom")) map.removeSource("uom");
+      map.addSource("uom", newSrc);
+      layers.forEach(l => map.addLayer(l));
+    }
+    const dji = await off.getCachedDji();
+    if (dji && map.getSource("dji")) {
+      map.getSource("dji").setData(dji);
+    }
+  }
+
+  btnDl.addEventListener("click", async () => {
+    btnDl.disabled = true;
+    progEl.classList.remove("hidden");
+    barEl.style.width = "0%";
+    pctEl.textContent = "0%";
+    try {
+      await off.download((p) => {
+        const pct = Math.round(p * 100);
+        barEl.style.width = pct + "%";
+        pctEl.textContent = pct + "%";
+      });
+      await swapToOfflineSources();
+    } catch (e) {
+      statusEl.innerHTML = `<span class="err">下载失败: ${e.message || e}</span>`;
+    } finally {
+      btnDl.disabled = false;
+      progEl.classList.add("hidden");
+      refresh();
+    }
+  });
+
+  btnPurge.addEventListener("click", async () => {
+    if (!confirm("删除离线数据？已下载的瓦片将无法离线访问。")) return;
+    await off.purge();
+    refresh();
+    // Suggest reload so the SW + protocol state are clean.
+    setTimeout(() => location.reload(), 500);
+  });
+
+  btnInstall.addEventListener("click", async () => {
+    const dp = window.__uomDeferredPrompt;
+    if (!dp) {
+      alert("当前浏览器不支持安装提示。\niOS Safari: 分享 → 添加到主屏幕");
+      return;
+    }
+    dp.prompt();
+    const { outcome } = await dp.userChoice;
+    if (outcome === "accepted") btnInstall.classList.add("hidden");
+    window.__uomDeferredPrompt = null;
+  });
+
+  // Init offline immediately so a previously-installed pmtiles is wired up
+  // before MapLibre fetches its first UOM tile from /xyz.
+  off.init().then(({ installed }) => {
+    refresh();
+    if (installed) {
+      // Map already loading from /xyz; swap on next idle.
+      if (map.loaded()) swapToOfflineSources();
+      else map.once("load", swapToOfflineSources);
+    }
+  });
+})();
 
 // ---------- Settings dialog ----------
 const settingsOverlay = document.getElementById("settings-overlay");

@@ -1,0 +1,16 @@
+{
+  "name": "UOM 适飞空域",
+  "short_name": "UOM",
+  "description": "UOM 适飞空域 + DJI 限飞空域离线预览",
+  "start_url": "/preview",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1a1d22",
+  "theme_color": "#1a1d22",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "lang": "zh-CN"
+}
