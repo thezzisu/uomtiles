@@ -1,7 +1,7 @@
 // sw.js — minimal stale-while-revalidate cache for the static shell.
 // pmtiles + DJI are stored in IndexedDB by offline.js, NOT here.
 
-const VERSION = "v1";
+const VERSION = "v2";
 const CACHE = "uom-shell-" + VERSION;
 const SHELL = [
   "/preview",
@@ -10,6 +10,7 @@ const SHELL = [
   "/preview.js",
   "/preview-app.js",
   "/offline.js",
+  "/reproj-worker.js",
   "/manifest.json",
   "/config.json",
   "/icon-192.png",

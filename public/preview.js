@@ -121,12 +121,57 @@ const lib = window.maplibreglRasterReprojection;
 if (!lib || !lib.createProtocol) {
   console.error("maplibre-gl-raster-reprojection not loaded");
 } else {
-  const { protocol, loader } = lib.createProtocol({
-    cacheSize: 64,
-    interval: [32, 32],
-    ...makeGcj02Preset(),
-  });
-  maplibregl.addProtocol(protocol, loader);
+  // Prefer a Web Worker (OffscreenCanvas) for the heavy slice+canvas work,
+  // falling back to the main-thread library when unavailable.
+  const canUseWorker = typeof Worker !== "undefined" && typeof OffscreenCanvas !== "undefined";
+  if (canUseWorker) {
+    const w = new Worker("/reproj-worker.js");
+    let nextId = 1;
+    const pending = new Map();
+    w.addEventListener("message", (ev) => {
+      const { id, ok, buf, err } = ev.data;
+      const p = pending.get(id);
+      if (!p) return;
+      pending.delete(id);
+      if (ok) p.resolve(buf ? { data: buf } : { data: new ArrayBuffer(0) });
+      else p.reject(new Error(err));
+    });
+
+    const REPROJ_URL_RE = /^reproject:\/\/([^:]+):\/\/(.+)$/;
+
+    maplibregl.addProtocol("reproject", (params, abort) => {
+      // params.url like:
+      //   reproject://bbox=mx0,my0,mx1,my1&z=Z&x=X&y=Y://https://...{sx}{sy}{sz}...
+      const m = params.url.match(REPROJ_URL_RE);
+      if (!m) return Promise.reject(new Error("bad url"));
+      const qs = new URLSearchParams(m[1]);
+      const bbox = (qs.get("bbox") || "").split(",").map(Number);
+      const z = +qs.get("z"), x = +qs.get("x"), y = +qs.get("y");
+      const urlTemplate = m[2];
+
+      return new Promise((resolve, reject) => {
+        const id = nextId++;
+        pending.set(id, { resolve, reject });
+        if (abort && abort.signal) {
+          abort.signal.addEventListener("abort", () => {
+            const p = pending.get(id);
+            if (p) { pending.delete(id); p.reject(new DOMException("aborted","AbortError")); }
+          });
+        }
+        w.postMessage({
+          id, type: "reproject",
+          data: { destTile: [x, y, z], destBbox: bbox, urlTemplate, tileSize: 256, interval: 32 },
+        });
+      });
+    });
+  } else {
+    const { protocol, loader } = lib.createProtocol({
+      cacheSize: 64,
+      interval: [32, 32],
+      ...makeGcj02Preset(),
+    });
+    maplibregl.addProtocol(protocol, loader);
+  }
 }
 
 function amapTiles(pathQuery) {

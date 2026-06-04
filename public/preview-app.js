@@ -323,6 +323,16 @@ if (!isMobile) {
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
   });
+  controls.addEventListener("pointerdown", e => e.stopPropagation());
+
+  // Outside tap collapses the drawer (only when expanded).
+  document.addEventListener("pointerdown", e => {
+    if (controls.classList.contains("collapsed")) return;
+    if (e.target.closest("#controls")) return;
+    if (e.target.closest("#settings-overlay")) return;
+    if (e.target.closest("#search-wrap")) return;
+    controls.classList.add("collapsed");
+  }, true);
 }
 
 window.__uomApp = { applyBasemap, applyColor, applyAlpha, COLOR_PRESETS, colorToHueRotate };
