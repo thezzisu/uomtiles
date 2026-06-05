@@ -365,10 +365,13 @@ window.__uomApp = { applyBasemap, applyColor, applyAlpha, COLOR_PRESETS, colorTo
   async function refresh() {
     const s = await off.getStatus();
     if (s.installed) {
-      statusEl.innerHTML = `已离线 <span class="ok">✓ ${fmt(s.pmtilesSize)}</span>`;
+      const total = (s.pmtilesSize || 0) + (s.djiSize || 0);
+      statusEl.innerHTML = `<span class="ok">已就绪</span>`;
+      statusEl.title = `共 ${fmt(total)} = UOM ${fmt(s.pmtilesSize)} + DJI ${fmt(s.djiSize)}`;
       btnRefresh.disabled = false;
     } else {
       statusEl.textContent = "—";
+      statusEl.title = "";
     }
   }
 

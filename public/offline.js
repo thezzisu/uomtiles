@@ -112,6 +112,7 @@ async function installPmtilesProtocol(blob) {
 async function init() {
   const blob = await idbGet(KEY_PMTILES).catch(() => null);
   if (blob) {
+    try { localStorage.setItem("uomtiles.installed", "1"); } catch (_) {}
     await installPmtilesProtocol(blob).catch(e => console.warn("pmtiles install failed", e));
   }
   return { installed: !!blob };
@@ -123,21 +124,25 @@ async function download(onProgress) {
     if (onProgress) onProgress(p * 0.95, recv, total, bps);
   });
   await idbPut(KEY_PMTILES, pmBlob);
-  // Step 2: dji geojson (small)
+  // Step 2: dji geojson (small, last 5%)
+  if (onProgress) onProgress(0.96, pmBlob.size, pmBlob.size, 0);
   try {
     const djiBlob = await downloadBlob("/dji.geojson");
     const buf = await djiBlob.arrayBuffer();
     await idbPut(KEY_DJI, buf);
+    if (onProgress) onProgress(0.99, pmBlob.size + buf.byteLength, pmBlob.size + buf.byteLength, 0);
   } catch (e) {
     console.warn("dji download failed", e);
   }
-  if (onProgress) onProgress(1, 0, 0, 0);
   await installPmtilesProtocol(pmBlob).catch(e => console.warn("pmtiles install failed", e));
+  if (onProgress) onProgress(1, pmBlob.size, pmBlob.size, 0);
+  try { localStorage.setItem("uomtiles.installed", "1"); } catch (_) {}
   return await getStatus();
 }
 
 async function purge() {
   await Promise.all([idbDel(KEY_PMTILES), idbDel(KEY_DJI)]);
+  try { localStorage.removeItem("uomtiles.installed"); } catch (_) {}
   // Best-effort: clear caches and unregister SW.
   try {
     if ("caches" in window) {

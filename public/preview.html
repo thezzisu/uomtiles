@@ -66,12 +66,13 @@
       </section>
 
       <section class="section">
-        <h4 class="section-label">UOM 适飞</h4>
-        <label class="toggle-row">
-          <input type="checkbox" id="uom-toggle" checked>
-          <span class="check"></span>
-          <span class="lbl">显示</span>
-        </label>
+        <div class="section-head">
+          <h4 class="section-label">UOM 适飞</h4>
+          <label class="toggle-inline" title="显示 / 隐藏 UOM 图层">
+            <input type="checkbox" id="uom-toggle" checked>
+            <span class="check"></span>
+          </label>
+        </div>
         <div class="slider-row">
           <input type="range" id="uom-alpha" min="0" max="100" value="60">
           <span class="val"><span id="alpha-val">60</span>%</span>
@@ -80,12 +81,13 @@
       </section>
 
       <section class="section">
-        <h4 class="section-label">DJI 限飞</h4>
-        <label class="toggle-row">
-          <input type="checkbox" id="dji-toggle" checked>
-          <span class="check"></span>
-          <span class="lbl">显示</span>
-        </label>
+        <div class="section-head">
+          <h4 class="section-label">DJI 限飞</h4>
+          <label class="toggle-inline" title="显示 / 隐藏 DJI 图层">
+            <input type="checkbox" id="dji-toggle" checked>
+            <span class="check"></span>
+          </label>
+        </div>
         <div class="dji-legend">
           <span style="--c:#ff6b6b">禁飞</span>
           <span style="--c:#feca57">警告 / 授权</span>
@@ -94,8 +96,10 @@
       </section>
 
       <section class="section" id="offline-section">
-        <h4 class="section-label">离线数据</h4>
-        <div class="offline-status" id="offline-status">—</div>
+        <div class="section-head">
+          <h4 class="section-label">离线数据</h4>
+          <span class="offline-status" id="offline-status" title="">—</span>
+        </div>
         <div class="offline-buttons">
           <button class="btn-link" id="offline-refresh" type="button">刷新数据</button>
           <button class="btn-link hidden" id="offline-install" type="button">安装到桌面</button>
@@ -137,6 +141,12 @@
       var isMobile = window.matchMedia("(max-width: 640px)").matches;
       var c = document.getElementById("controls");
       if (c && !isMobile) c.classList.remove("collapsed");
+      // If we know from a prior visit that data is installed, hide the boot
+      // overlay synchronously to avoid an open-screen flash.
+      if (localStorage.getItem("uomtiles.installed") === "1") {
+        var b = document.getElementById("boot-overlay");
+        if (b) b.classList.add("hidden");
+      }
       requestAnimationFrame(function(){
         requestAnimationFrame(function(){
           c && c.classList.remove("init-no-transition");

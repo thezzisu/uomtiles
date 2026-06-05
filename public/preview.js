@@ -46,8 +46,9 @@ const boot = (() => {
       retryEl.onclick = null;
     },
     finish() {
+      if (overlay.classList.contains("hidden")) return;
       overlay.classList.add("fade-out");
-      setTimeout(() => overlay.classList.add("hidden"), 400);
+      setTimeout(() => overlay.classList.add("hidden"), 280);
     },
   };
 })();
@@ -60,10 +61,8 @@ async function ensureOfflineData() {
   }
   const status0 = await off.getStatus();
   if (status0.installed) {
-    // Already cached; quickly wire the protocol from IDB.
-    await off.init();
     boot.update(1, status0.pmtilesSize, status0.pmtilesSize, 0);
-    boot.setStatus("已就绪");
+    await off.init();
     return;
   }
   while (true) {
@@ -71,7 +70,6 @@ async function ensureOfflineData() {
     boot.setStatus("正在下载离线数据…");
     try {
       await off.download((p, recv, total, bps) => boot.update(p, recv, total, bps));
-      boot.setStatus("已就绪");
       return;
     } catch (e) {
       const msg = (e && e.message) ? e.message : String(e);
@@ -82,6 +80,8 @@ async function ensureOfflineData() {
 }
 
 await ensureOfflineData();
+boot.finish();
+
 
 
 // ---------- WGS-84 ↔ GCJ-02 (closed-form, public-domain) ----------
@@ -399,12 +399,6 @@ map.addControl(new maplibregl.ScaleControl({ maxWidth: 90, unit: "metric" }), "b
 window.__uomState = { map, basemaps, sources, initialBasemapId: initial.id };
 window.__uomCoord = { wgs84ToGcj02, gcj02ToWgs84 };
 window.__uomTheme = { bgColorForTheme };
-
-// Fade out the boot overlay once the map is ready (or after a short fallback).
-let bootDone = false;
-const finishBoot = () => { if (bootDone) return; bootDone = true; boot.finish(); };
-map.on("load", finishBoot);
-setTimeout(finishBoot, 4500); // safety net in case basemap CDN is slow
 
 // ===== Bootstrap continues in preview-app.js =====
 function getAmapKey() { return localStorage.getItem("uomtiles.amapKey") || ""; }

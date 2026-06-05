@@ -6,7 +6,7 @@
     oklch(0.18 0.04 250) 0%,
     oklch(0.10 0.005 250) 60%);
   padding:24px;
-  transition:opacity .35s ease-out;
+  transition:opacity .25s ease-out;
 }
 :root[data-theme="light"] #boot-overlay,
 :root[data-theme="system"] #boot-overlay{
@@ -154,6 +154,12 @@ button{cursor:pointer}
   border:1px solid var(--border)!important;border-radius:var(--radius)!important;
   box-shadow:var(--shadow)!important;overflow:hidden
 }
+/* Top-left control stack: extra breathing room from the screen edges */
+.maplibregl-ctrl-top-left{margin:6px 0 0 6px}
+.maplibregl-ctrl-bottom-left{margin:0 0 6px 6px}
+.maplibregl-ctrl-top-right{margin:6px 6px 0 0}
+.maplibregl-ctrl-bottom-right{margin:0 6px 6px 0}
+
 /* Merge consecutive top-left groups into one visual stack */
 .maplibregl-ctrl-top-left .maplibregl-ctrl-group{margin:0!important}
 .maplibregl-ctrl-top-left .maplibregl-ctrl-group + .maplibregl-ctrl-group{
@@ -325,6 +331,28 @@ button{cursor:pointer}
   margin:0 0 8px;font-size:10px;font-weight:600;
   letter-spacing:.14em;text-transform:uppercase;color:var(--fg-dim)
 }
+.section-head{
+  display:flex;align-items:center;gap:10px;margin-bottom:8px
+}
+.section-head .section-label{margin:0;flex:0 0 auto}
+.section-head > :last-child{margin-left:auto}
+
+/* inline toggle (compact, no label text) */
+.toggle-inline{
+  display:inline-flex;align-items:center;cursor:pointer;
+}
+.toggle-inline input{position:absolute;opacity:0;pointer-events:none}
+.toggle-inline .check{
+  width:26px;height:14px;border-radius:7px;background:var(--border-strong);
+  position:relative;flex-shrink:0;transition:background .2s
+}
+.toggle-inline .check::after{
+  content:"";width:10px;height:10px;border-radius:50%;background:var(--bg-modal);
+  position:absolute;top:2px;left:2px;transition:left .2s;
+  box-shadow:0 1px 2px oklch(0 0 0 / 0.3)
+}
+.toggle-inline input:checked + .check{background:var(--accent)}
+.toggle-inline input:checked + .check::after{left:14px;background:#fff}
 
 /* basemap matrix */
 #basemap-list{display:flex;flex-direction:column;gap:6px}
@@ -408,8 +436,11 @@ button{cursor:pointer}
 .link-btn svg{flex-shrink:0;opacity:.85}
 
 /* offline section */
-.offline-status{font-size:11.5px;color:var(--fg-muted);margin-bottom:8px;line-height:1.5}
-.offline-status .ok{color:var(--accent);font-weight:500;font-variant-numeric:tabular-nums}
+.offline-status{
+  font-size:11.5px;color:var(--fg-muted);line-height:1.2;
+  font-variant-numeric:tabular-nums;cursor:default
+}
+.offline-status .ok{color:var(--accent);font-weight:500}
 .offline-status .err{color:var(--danger,#e85a4a)}
 .offline-progress{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .offline-progress.hidden{display:none}
