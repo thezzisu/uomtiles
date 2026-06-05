@@ -38,6 +38,14 @@ function colorToHueRotate(hex) {
   return ((hexToHue(hex) - SRC_HUE + 720) % 360);
 }
 
+// ---------- Layer ordering invariant ----------
+// Stack from bottom: bg-fallback → basemap-* → uom-overlay → dji-fill → dji-line.
+// Call pinTopLayers() any time layers are added or basemap is swapped.
+function pinTopLayers() {
+  const order = ["uom-overlay", "dji-fill", "dji-line"];
+  order.forEach(id => { if (map.getLayer(id)) map.moveLayer(id); });
+}
+
 // ---------- Basemap matrix (provider rows × variant chips) ----------
 let currentBasemapId = initialBasemapId;
 function applyBasemap(id) {
@@ -60,6 +68,7 @@ function applyBasemap(id) {
   document.querySelectorAll(".bm-row .chip").forEach(c => {
     c.setAttribute("aria-pressed", c.dataset.id === id ? "true" : "false");
   });
+  pinTopLayers();
 }
 
 const basemapList = document.getElementById("basemap-list");
@@ -145,11 +154,12 @@ async function loadDji() {
     const fillSpec = ["match", ["get", "type"], "restricted", "#ff6b6b", "warning", "#feca57", "auth", "#feca57", "recommended", "#48dbfb", "#888"];
     const opacitySpec = ["match", ["get", "type"], "restricted", 0.20, "warning", 0.15, "auth", 0.15, "recommended", 0.10, 0.10];
     if (!map.getLayer("dji-fill")) {
-      map.addLayer({ id: "dji-fill", type: "fill", source: "dji", paint: { "fill-color": fillSpec, "fill-opacity": opacitySpec } });
+      map.addLayer({ id: "dji-fill", type: "fill", source: "dji", paint: { "fill-color": fillSpec, "fill-opacity": opacitySpec }, metadata: { dji: true } });
     }
     if (!map.getLayer("dji-line")) {
-      map.addLayer({ id: "dji-line", type: "line", source: "dji", paint: { "line-color": fillSpec, "line-width": 1 } });
+      map.addLayer({ id: "dji-line", type: "line", source: "dji", paint: { "line-color": fillSpec, "line-width": 1 }, metadata: { dji: true } });
     }
+    pinTopLayers();
     map.on("click", "dji-fill", e => {
       if (!e.features || e.features.length === 0) return;
       const f = e.features[0];
@@ -342,13 +352,21 @@ window.__uomApp = { applyBasemap, applyColor, applyAlpha, COLOR_PRESETS, colorTo
   const off = window.__uomOffline;
   if (!off) return;
 
+  const AUTO_KEY = "uomtiles.autoOffline";
+  function autoEnabled() { return localStorage.getItem(AUTO_KEY) !== "false"; }
+  function setAuto(v) { localStorage.setItem(AUTO_KEY, v ? "true" : "false"); }
+
   const statusEl = document.getElementById("offline-status");
   const progEl = document.getElementById("offline-progress");
   const barEl = document.getElementById("offline-bar");
   const pctEl = document.getElementById("offline-pct");
-  const btnDl = document.getElementById("offline-download");
+  const autoToggle = document.getElementById("offline-auto");
+  const btnRetry = document.getElementById("offline-retry");
   const btnPurge = document.getElementById("offline-purge");
   const btnInstall = document.getElementById("offline-install");
+
+  let downloading = false;
+  let lastError = null;
 
   function fmt(bytes) {
     if (!bytes) return "0";
@@ -357,14 +375,31 @@ window.__uomApp = { applyBasemap, applyColor, applyAlpha, COLOR_PRESETS, colorTo
   }
 
   async function refresh() {
+    autoToggle.checked = autoEnabled();
     const s = await off.getStatus();
+    if (downloading) {
+      progEl.classList.remove("hidden");
+      statusEl.textContent = "下载中…";
+      btnRetry.classList.add("hidden");
+      btnPurge.classList.add("hidden");
+      return;
+    }
+    progEl.classList.add("hidden");
     if (s.installed) {
-      statusEl.innerHTML = `已下载 <span class="ok">${fmt(s.pmtilesSize)}</span>`;
-      btnDl.classList.add("hidden");
+      statusEl.innerHTML = `已离线 <span class="ok">✓ ${fmt(s.pmtilesSize)}</span>`;
+      btnRetry.classList.add("hidden");
       btnPurge.classList.remove("hidden");
+    } else if (lastError) {
+      statusEl.innerHTML = `<span class="err">下载失败: ${lastError}</span>`;
+      btnRetry.classList.remove("hidden");
+      btnPurge.classList.add("hidden");
+    } else if (autoEnabled()) {
+      statusEl.textContent = "正在准备离线…";
+      btnRetry.classList.add("hidden");
+      btnPurge.classList.add("hidden");
     } else {
-      statusEl.textContent = "未下载（在线模式）";
-      btnDl.classList.remove("hidden");
+      statusEl.textContent = "在线模式（自动离线已关闭）";
+      btnRetry.classList.add("hidden");
       btnPurge.classList.add("hidden");
     }
   }
@@ -382,11 +417,14 @@ window.__uomApp = { applyBasemap, applyColor, applyAlpha, COLOR_PRESETS, colorTo
     if (dji && map.getSource("dji")) {
       map.getSource("dji").setData(dji);
     }
+    pinTopLayers();
   }
 
-  btnDl.addEventListener("click", async () => {
-    btnDl.disabled = true;
-    progEl.classList.remove("hidden");
+  async function runDownload() {
+    if (downloading) return;
+    downloading = true;
+    lastError = null;
+    refresh();
     barEl.style.width = "0%";
     pctEl.textContent = "0%";
     try {
@@ -397,19 +435,43 @@ window.__uomApp = { applyBasemap, applyColor, applyAlpha, COLOR_PRESETS, colorTo
       });
       await swapToOfflineSources();
     } catch (e) {
-      statusEl.innerHTML = `<span class="err">下载失败: ${e.message || e}</span>`;
+      lastError = (e && e.message) ? e.message : String(e);
     } finally {
-      btnDl.disabled = false;
-      progEl.classList.add("hidden");
+      downloading = false;
       refresh();
     }
+  }
+
+  function scheduleIdle(fn) {
+    if ("requestIdleCallback" in window) {
+      requestIdleCallback(fn, { timeout: 5000 });
+    } else {
+      setTimeout(fn, 500);
+    }
+  }
+
+  async function maybeAutoDownload() {
+    if (!autoEnabled() || downloading) return;
+    const s = await off.getStatus();
+    if (s.installed) return;
+    scheduleIdle(runDownload);
+  }
+
+  autoToggle.addEventListener("change", () => {
+    setAuto(autoToggle.checked);
+    refresh();
+    if (autoToggle.checked) maybeAutoDownload();
+  });
+
+  btnRetry.addEventListener("click", () => {
+    lastError = null;
+    runDownload();
   });
 
   btnPurge.addEventListener("click", async () => {
-    if (!confirm("删除离线数据？已下载的瓦片将无法离线访问。")) return;
+    if (!confirm("删除离线数据？已下载的瓦片将无法离线访问。\n（如果保持「自动离线」开启，下次访问会自动重新下载）")) return;
     await off.purge();
     refresh();
-    // Suggest reload so the SW + protocol state are clean.
     setTimeout(() => location.reload(), 500);
   });
 
@@ -425,14 +487,14 @@ window.__uomApp = { applyBasemap, applyColor, applyAlpha, COLOR_PRESETS, colorTo
     window.__uomDeferredPrompt = null;
   });
 
-  // Init offline immediately so a previously-installed pmtiles is wired up
-  // before MapLibre fetches its first UOM tile from /xyz.
+  // Init: wire pmtiles protocol if blob already in IDB; then maybe auto-download.
   off.init().then(({ installed }) => {
     refresh();
     if (installed) {
-      // Map already loading from /xyz; swap on next idle.
       if (map.loaded()) swapToOfflineSources();
       else map.once("load", swapToOfflineSources);
+    } else {
+      maybeAutoDownload();
     }
   });
 })();

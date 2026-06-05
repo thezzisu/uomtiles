@@ -75,14 +75,19 @@
 
       <section class="section" id="offline-section">
         <h4 class="section-label">离线</h4>
+        <label class="toggle-row">
+          <input type="checkbox" id="offline-auto" checked>
+          <span class="check"></span>
+          <span class="lbl">自动离线</span>
+        </label>
         <div class="offline-status" id="offline-status">检测中…</div>
         <div class="offline-progress hidden" id="offline-progress">
           <div class="bar"><div class="fill" id="offline-bar"></div></div>
           <span class="pct" id="offline-pct">0%</span>
         </div>
         <div class="offline-buttons">
-          <button class="btn-link" id="offline-download" type="button">下载离线数据</button>
-          <button class="btn-link warn hidden" id="offline-purge" type="button">删除</button>
+          <button class="btn-link hidden" id="offline-retry" type="button">重试下载</button>
+          <button class="btn-link warn hidden" id="offline-purge" type="button">删除离线数据</button>
           <button class="btn-link hidden" id="offline-install" type="button">安装到桌面</button>
         </div>
       </section>
