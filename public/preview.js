@@ -10,6 +10,80 @@ const cfg = (cfgRes && cfgRes.ok) ? await cfgRes.json() : {};
 const TDT_TOKEN = cfg.tiandituToken || "";
 const isMobile = window.matchMedia("(max-width: 640px)").matches;
 
+// ---------- Boot gate: ensure offline pmtiles is installed before showing the map ----------
+const boot = (() => {
+  const overlay = document.getElementById("boot-overlay");
+  const status = document.getElementById("boot-status");
+  const fillEl = document.getElementById("boot-fill");
+  const pctEl = document.getElementById("boot-pct");
+  const speedEl = document.getElementById("boot-speed");
+  const bytesEl = document.getElementById("boot-bytes");
+  const retryEl = document.getElementById("boot-retry");
+  function fmtMB(b) { return (b / 1024 / 1024).toFixed(1) + " MB"; }
+  function fmtSpeed(bps) {
+    if (!bps) return "— MB/s";
+    if (bps > 1024*1024) return (bps / 1024 / 1024).toFixed(1) + " MB/s";
+    return (bps / 1024).toFixed(0) + " KB/s";
+  }
+  return {
+    update(p, recv, total, bps) {
+      const pct = Math.max(0, Math.min(100, Math.round(p * 100)));
+      fillEl.style.width = pct + "%";
+      pctEl.textContent = pct + "%";
+      speedEl.textContent = fmtSpeed(bps);
+      if (total) bytesEl.textContent = fmtMB(recv) + " / " + fmtMB(total);
+    },
+    setStatus(text, isError) {
+      status.textContent = text;
+      status.classList.toggle("err", !!isError);
+    },
+    showRetry(onClick) {
+      retryEl.classList.remove("hidden");
+      retryEl.onclick = onClick;
+    },
+    hideRetry() {
+      retryEl.classList.add("hidden");
+      retryEl.onclick = null;
+    },
+    finish() {
+      overlay.classList.add("fade-out");
+      setTimeout(() => overlay.classList.add("hidden"), 400);
+    },
+  };
+})();
+
+async function ensureOfflineData() {
+  const off = window.__uomOffline;
+  if (!off) {
+    boot.setStatus("offline.js 未加载", true);
+    throw new Error("offline.js missing");
+  }
+  const status0 = await off.getStatus();
+  if (status0.installed) {
+    // Already cached; quickly wire the protocol from IDB.
+    await off.init();
+    boot.update(1, status0.pmtilesSize, status0.pmtilesSize, 0);
+    boot.setStatus("已就绪");
+    return;
+  }
+  while (true) {
+    boot.hideRetry();
+    boot.setStatus("正在下载离线数据…");
+    try {
+      await off.download((p, recv, total, bps) => boot.update(p, recv, total, bps));
+      boot.setStatus("已就绪");
+      return;
+    } catch (e) {
+      const msg = (e && e.message) ? e.message : String(e);
+      boot.setStatus("下载失败：" + msg, true);
+      await new Promise(resolve => boot.showRetry(resolve));
+    }
+  }
+}
+
+await ensureOfflineData();
+
+
 // ---------- WGS-84 ↔ GCJ-02 (closed-form, public-domain) ----------
 function wgs84ToGcj02(lon, lat) {
   if (lon < 72.004 || lon > 137.8347 || lat < 0.8293 || lat > 55.8271) return [lon, lat];
@@ -194,7 +268,7 @@ function tdtTiles(layer) {
 }
 
 const sources = {
-  uom: { type: "raster", tiles: [location.origin + "/xyz/{z}/{x}/{y}.png"], tileSize: 256, minzoom: 0, maxzoom: 13, attribution: "UOM 适飞" },
+  uom: { type: "raster", url: "pmtiles://uom-pmtiles", tileSize: 256, attribution: "UOM 适飞" },
   osm: { type: "raster", tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], tileSize: 256, minzoom: 0, maxzoom: 19, attribution: "© OSM" },
   cartoVoy: { type: "raster", tiles: ["https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png", "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png", "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"], tileSize: 256, minzoom: 0, maxzoom: 19, attribution: "© CARTO" },
   cartoDark: { type: "raster", tiles: ["https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"], tileSize: 256, minzoom: 0, maxzoom: 19, attribution: "© CARTO" },
@@ -325,6 +399,12 @@ map.addControl(new maplibregl.ScaleControl({ maxWidth: 90, unit: "metric" }), "b
 window.__uomState = { map, basemaps, sources, initialBasemapId: initial.id };
 window.__uomCoord = { wgs84ToGcj02, gcj02ToWgs84 };
 window.__uomTheme = { bgColorForTheme };
+
+// Fade out the boot overlay once the map is ready (or after a short fallback).
+let bootDone = false;
+const finishBoot = () => { if (bootDone) return; bootDone = true; boot.finish(); };
+map.on("load", finishBoot);
+setTimeout(finishBoot, 4500); // safety net in case basemap CDN is slow
 
 // ===== Bootstrap continues in preview-app.js =====
 function getAmapKey() { return localStorage.getItem("uomtiles.amapKey") || ""; }

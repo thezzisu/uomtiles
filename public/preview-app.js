@@ -352,21 +352,9 @@ window.__uomApp = { applyBasemap, applyColor, applyAlpha, COLOR_PRESETS, colorTo
   const off = window.__uomOffline;
   if (!off) return;
 
-  const AUTO_KEY = "uomtiles.autoOffline";
-  function autoEnabled() { return localStorage.getItem(AUTO_KEY) !== "false"; }
-  function setAuto(v) { localStorage.setItem(AUTO_KEY, v ? "true" : "false"); }
-
   const statusEl = document.getElementById("offline-status");
-  const progEl = document.getElementById("offline-progress");
-  const barEl = document.getElementById("offline-bar");
-  const pctEl = document.getElementById("offline-pct");
-  const autoToggle = document.getElementById("offline-auto");
-  const btnRetry = document.getElementById("offline-retry");
-  const btnPurge = document.getElementById("offline-purge");
+  const btnRefresh = document.getElementById("offline-refresh");
   const btnInstall = document.getElementById("offline-install");
-
-  let downloading = false;
-  let lastError = null;
 
   function fmt(bytes) {
     if (!bytes) return "0";
@@ -375,104 +363,24 @@ window.__uomApp = { applyBasemap, applyColor, applyAlpha, COLOR_PRESETS, colorTo
   }
 
   async function refresh() {
-    autoToggle.checked = autoEnabled();
     const s = await off.getStatus();
-    if (downloading) {
-      progEl.classList.remove("hidden");
-      statusEl.textContent = "下载中…";
-      btnRetry.classList.add("hidden");
-      btnPurge.classList.add("hidden");
-      return;
-    }
-    progEl.classList.add("hidden");
     if (s.installed) {
       statusEl.innerHTML = `已离线 <span class="ok">✓ ${fmt(s.pmtilesSize)}</span>`;
-      btnRetry.classList.add("hidden");
-      btnPurge.classList.remove("hidden");
-    } else if (lastError) {
-      statusEl.innerHTML = `<span class="err">下载失败: ${lastError}</span>`;
-      btnRetry.classList.remove("hidden");
-      btnPurge.classList.add("hidden");
-    } else if (autoEnabled()) {
-      statusEl.textContent = "正在准备离线…";
-      btnRetry.classList.add("hidden");
-      btnPurge.classList.add("hidden");
+      btnRefresh.disabled = false;
     } else {
-      statusEl.textContent = "在线模式（自动离线已关闭）";
-      btnRetry.classList.add("hidden");
-      btnPurge.classList.add("hidden");
+      statusEl.textContent = "—";
     }
   }
 
-  async function swapToOfflineSources() {
-    if (window.__uomOfflinePM) {
-      const newSrc = { type: "raster", url: "pmtiles://uom-pmtiles", tileSize: 256, attribution: "UOM 适飞" };
-      const layers = map.getStyle().layers.filter(l => l.source === "uom").map(l => ({...l}));
-      layers.forEach(l => map.getLayer(l.id) && map.removeLayer(l.id));
-      if (map.getSource("uom")) map.removeSource("uom");
-      map.addSource("uom", newSrc);
-      layers.forEach(l => map.addLayer(l));
-    }
-    const dji = await off.getCachedDji();
-    if (dji && map.getSource("dji")) {
-      map.getSource("dji").setData(dji);
-    }
-    pinTopLayers();
-  }
-
-  async function runDownload() {
-    if (downloading) return;
-    downloading = true;
-    lastError = null;
-    refresh();
-    barEl.style.width = "0%";
-    pctEl.textContent = "0%";
+  // "刷新数据": clear IDB + caches, then reload (boot overlay re-downloads).
+  btnRefresh.addEventListener("click", async () => {
+    if (!confirm("刷新离线数据？将重新下载约 85 MB。")) return;
+    btnRefresh.disabled = true;
+    statusEl.textContent = "正在重置…";
     try {
-      await off.download((p) => {
-        const pct = Math.round(p * 100);
-        barEl.style.width = pct + "%";
-        pctEl.textContent = pct + "%";
-      });
-      await swapToOfflineSources();
-    } catch (e) {
-      lastError = (e && e.message) ? e.message : String(e);
-    } finally {
-      downloading = false;
-      refresh();
-    }
-  }
-
-  function scheduleIdle(fn) {
-    if ("requestIdleCallback" in window) {
-      requestIdleCallback(fn, { timeout: 5000 });
-    } else {
-      setTimeout(fn, 500);
-    }
-  }
-
-  async function maybeAutoDownload() {
-    if (!autoEnabled() || downloading) return;
-    const s = await off.getStatus();
-    if (s.installed) return;
-    scheduleIdle(runDownload);
-  }
-
-  autoToggle.addEventListener("change", () => {
-    setAuto(autoToggle.checked);
-    refresh();
-    if (autoToggle.checked) maybeAutoDownload();
-  });
-
-  btnRetry.addEventListener("click", () => {
-    lastError = null;
-    runDownload();
-  });
-
-  btnPurge.addEventListener("click", async () => {
-    if (!confirm("删除离线数据？已下载的瓦片将无法离线访问。\n（如果保持「自动离线」开启，下次访问会自动重新下载）")) return;
-    await off.purge();
-    refresh();
-    setTimeout(() => location.reload(), 500);
+      await off.purge();
+    } catch (_) {}
+    location.reload();
   });
 
   btnInstall.addEventListener("click", async () => {
@@ -487,16 +395,8 @@ window.__uomApp = { applyBasemap, applyColor, applyAlpha, COLOR_PRESETS, colorTo
     window.__uomDeferredPrompt = null;
   });
 
-  // Init: wire pmtiles protocol if blob already in IDB; then maybe auto-download.
-  off.init().then(({ installed }) => {
-    refresh();
-    if (installed) {
-      if (map.loaded()) swapToOfflineSources();
-      else map.once("load", swapToOfflineSources);
-    } else {
-      maybeAutoDownload();
-    }
-  });
+  // Boot already ensured the pmtiles is in IDB. Just refresh status.
+  refresh();
 })();
 
 // ---------- Settings dialog ----------

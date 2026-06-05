@@ -1,4 +1,79 @@
-/* ============ Theme tokens ============ */
+/* ============ Boot overlay ============ */
+#boot-overlay{
+  position:fixed;inset:0;z-index:1000;
+  display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 30% 20%,
+    oklch(0.18 0.04 250) 0%,
+    oklch(0.10 0.005 250) 60%);
+  padding:24px;
+  transition:opacity .35s ease-out;
+}
+:root[data-theme="light"] #boot-overlay,
+:root[data-theme="system"] #boot-overlay{
+  background:radial-gradient(circle at 30% 20%,
+    oklch(0.96 0.01 250) 0%,
+    oklch(0.92 0.005 250) 60%);
+}
+@media (prefers-color-scheme: light){
+  :root[data-theme="system"] #boot-overlay{
+    background:radial-gradient(circle at 30% 20%,
+      oklch(0.96 0.01 250) 0%,
+      oklch(0.92 0.005 250) 60%);
+  }
+}
+#boot-overlay.fade-out{opacity:0;pointer-events:none}
+#boot-overlay.hidden{display:none}
+
+.boot-card{
+  width:min(100%, 420px);
+  display:flex;flex-direction:column;align-items:center;
+  text-align:center;gap:14px;
+}
+.boot-icon{
+  display:flex;align-items:center;justify-content:center;
+  width:72px;height:72px;border-radius:18px;
+  background:var(--accent);color:#fff;
+  box-shadow:0 6px 24px oklch(0.65 0.16 240 / 0.4);
+  margin-bottom:6px;
+}
+.boot-title{
+  margin:0;font-size:20px;font-weight:600;letter-spacing:.02em;color:var(--fg);
+}
+.boot-status{
+  margin:0;font-size:13px;color:var(--fg-muted);
+}
+.boot-status.err{color:var(--danger)}
+.boot-progress{width:100%}
+.boot-bar{
+  width:100%;height:6px;border-radius:3px;
+  background:var(--border-strong);overflow:hidden
+}
+.boot-fill{
+  height:100%;width:0;
+  background:linear-gradient(90deg,
+    var(--accent) 0%,
+    oklch(0.75 0.16 240) 100%);
+  transition:width .15s linear;
+}
+.boot-meta{
+  display:flex;justify-content:space-between;width:100%;
+  font:11.5px ui-monospace,Menlo,Consolas,monospace;
+  font-variant-numeric:tabular-nums;color:var(--fg-muted)
+}
+.boot-meta span:first-child{font-weight:600;color:var(--fg)}
+.boot-retry{margin-top:6px;padding:8px 18px;border-radius:6px;font-size:13px}
+.boot-retry.hidden{display:none}
+.boot-hint{
+  margin:8px 0 0;font-size:11px;color:var(--fg-dim);line-height:1.5;max-width:320px
+}
+
+@keyframes boot-pulse{
+  0%, 100% { opacity:.85 }
+  50% { opacity:1 }
+}
+.boot-icon{animation:boot-pulse 1.6s ease-in-out infinite}
+
+
 :root,
 :root[data-theme="dark"]{
   color-scheme:dark;

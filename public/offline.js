@@ -58,7 +58,7 @@ async function getStatus() {
   }
 }
 
-// Stream-fetch a URL into a Blob, reporting progress.
+// Stream-fetch a URL into a Blob, reporting progress { ratio, received, total, bps }.
 async function downloadBlob(url, onProgress) {
   const res = await fetch(url);
   if (!res.ok) throw new Error("HTTP " + res.status);
@@ -66,12 +66,23 @@ async function downloadBlob(url, onProgress) {
   const reader = res.body.getReader();
   const chunks = [];
   let received = 0;
+  let lastT = performance.now();
+  let lastBytes = 0;
+  let bps = 0;
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     chunks.push(value);
     received += value.length;
-    if (onProgress && total) onProgress(received / total, received, total);
+    const now = performance.now();
+    const dt = now - lastT;
+    if (dt >= 250) {
+      const inst = ((received - lastBytes) * 1000) / dt;
+      bps = bps ? (bps * 0.6 + inst * 0.4) : inst; // EWMA
+      lastT = now;
+      lastBytes = received;
+    }
+    if (onProgress && total) onProgress(received / total, received, total, bps);
   }
   return new Blob(chunks);
 }
@@ -108,8 +119,8 @@ async function init() {
 
 async function download(onProgress) {
   // Step 1: pmtiles (large, weighted 95% of progress)
-  const pmBlob = await downloadBlob("/uom-shifei.pmtiles", (p, recv, total) => {
-    if (onProgress) onProgress(p * 0.95, recv, total);
+  const pmBlob = await downloadBlob("/uom-shifei.pmtiles", (p, recv, total, bps) => {
+    if (onProgress) onProgress(p * 0.95, recv, total, bps);
   });
   await idbPut(KEY_PMTILES, pmBlob);
   // Step 2: dji geojson (small)
@@ -120,7 +131,7 @@ async function download(onProgress) {
   } catch (e) {
     console.warn("dji download failed", e);
   }
-  if (onProgress) onProgress(1, 0, 0);
+  if (onProgress) onProgress(1, 0, 0, 0);
   await installPmtilesProtocol(pmBlob).catch(e => console.warn("pmtiles install failed", e));
   return await getStatus();
 }

@@ -15,6 +15,26 @@
 <body>
   <div id="map"></div>
 
+  <div id="boot-overlay">
+    <div class="boot-card">
+      <div class="boot-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="44" height="44" fill="currentColor"><path d="M2.245 21.655a1 1 0 0 1-.14-1.102l9-18a1 1 0 0 1 1.79 0l9 18a1 1 0 0 1-1.211 1.396L12 19.054l-8.684 2.895a1 1 0 0 1-1.071-.294zM13 17.28l6.026 2.009L12 5.236L4.974 19.288L11 17.279V12a1 1 0 1 1 2 0v5.28z"/></svg>
+      </div>
+      <h1 class="boot-title">UOM 适飞空域</h1>
+      <p class="boot-status" id="boot-status">正在下载离线数据…</p>
+      <div class="boot-progress">
+        <div class="boot-bar"><div class="boot-fill" id="boot-fill"></div></div>
+      </div>
+      <div class="boot-meta">
+        <span id="boot-pct">0%</span>
+        <span id="boot-speed">— MB/s</span>
+        <span id="boot-bytes">— / —</span>
+      </div>
+      <button class="btn-primary boot-retry hidden" id="boot-retry" type="button">重试</button>
+      <p class="boot-hint">数据约 85 MB，仅首次需要下载，后续完全离线可用。</p>
+    </div>
+  </div>
+
   <div id="search-wrap" class="hidden" data-collapsed="false">
     <button id="search-icon" type="button" aria-label="搜索">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16.102 17.162a8 8 0 1 1 1.06-1.06l4.618 4.618a.75.75 0 1 1-1.06 1.06zM17.5 11a6.5 6.5 0 1 0-13 0a6.5 6.5 0 0 0 13 0"/></svg>
@@ -74,20 +94,10 @@
       </section>
 
       <section class="section" id="offline-section">
-        <h4 class="section-label">离线</h4>
-        <label class="toggle-row">
-          <input type="checkbox" id="offline-auto" checked>
-          <span class="check"></span>
-          <span class="lbl">自动离线</span>
-        </label>
-        <div class="offline-status" id="offline-status">检测中…</div>
-        <div class="offline-progress hidden" id="offline-progress">
-          <div class="bar"><div class="fill" id="offline-bar"></div></div>
-          <span class="pct" id="offline-pct">0%</span>
-        </div>
+        <h4 class="section-label">离线数据</h4>
+        <div class="offline-status" id="offline-status">—</div>
         <div class="offline-buttons">
-          <button class="btn-link hidden" id="offline-retry" type="button">重试下载</button>
-          <button class="btn-link warn hidden" id="offline-purge" type="button">删除离线数据</button>
+          <button class="btn-link" id="offline-refresh" type="button">刷新数据</button>
           <button class="btn-link hidden" id="offline-install" type="button">安装到桌面</button>
         </div>
       </section>
