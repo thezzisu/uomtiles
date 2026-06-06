@@ -119,23 +119,61 @@ async function init() {
 }
 
 async function download(onProgress) {
-  // Step 1: pmtiles (large, weighted 95% of progress)
-  const pmBlob = await downloadBlob("/uom-shifei.pmtiles", (p, recv, total, bps) => {
-    if (onProgress) onProgress(p * 0.95, recv, total, bps);
-  });
+  // Probe content-length for both assets so we can show a single, accurate
+  // progress meter that covers UOM (pmtiles) + DJI (geojson).
+  const probe = async url => {
+    try {
+      const r = await fetch(url, { method: "HEAD" });
+      const cl = parseInt(r.headers.get("content-length") || "0", 10);
+      return cl > 0 ? cl : 0;
+    } catch (_) { return 0; }
+  };
+  let [pmTotal, djiTotal] = await Promise.all([
+    probe("/uom-shifei.pmtiles"),
+    probe("/dji.geojson"),
+  ]);
+  // DJI fallback estimate: 6 MB is a safe upper bound for the geojson;
+  // real value will overwrite this once the first chunk arrives.
+  if (!djiTotal) djiTotal = 6 * 1024 * 1024;
+  let grandTotal = pmTotal + djiTotal;
+
+  let baseBytes = 0;
+  const onChunk = (recv, total, bps) => {
+    if (!onProgress) return;
+    const merged = baseBytes + recv;
+    // If a stream reports a more accurate total than our probe, adopt it.
+    if (total) {
+      const expected = baseBytes ? pmTotal + total : total + djiTotal;
+      if (expected > grandTotal) grandTotal = expected;
+    }
+    const ratio = grandTotal ? Math.min(1, merged / grandTotal) : 0;
+    onProgress(ratio, merged, grandTotal, bps);
+  };
+
+  const pmBlob = await downloadBlob(
+    "/uom-shifei.pmtiles",
+    (_p, recv, total, bps) => onChunk(recv, total, bps)
+  );
   await idbPut(KEY_PMTILES, pmBlob);
-  // Step 2: dji geojson (small, last 5%)
-  if (onProgress) onProgress(0.96, pmBlob.size, pmBlob.size, 0);
+  baseBytes += pmBlob.size;
+  if (pmBlob.size > pmTotal) pmTotal = pmBlob.size;
+
   try {
-    const djiBlob = await downloadBlob("/dji.geojson");
+    const djiBlob = await downloadBlob(
+      "/dji.geojson",
+      (_p, recv, total, bps) => onChunk(recv, total, bps)
+    );
     const buf = await djiBlob.arrayBuffer();
     await idbPut(KEY_DJI, buf);
-    if (onProgress) onProgress(0.99, pmBlob.size + buf.byteLength, pmBlob.size + buf.byteLength, 0);
+    baseBytes += buf.byteLength;
+    djiTotal = buf.byteLength;
   } catch (e) {
     console.warn("dji download failed", e);
   }
+
+  grandTotal = pmTotal + djiTotal;
   await installPmtilesProtocol(pmBlob).catch(e => console.warn("pmtiles install failed", e));
-  if (onProgress) onProgress(1, pmBlob.size, pmBlob.size, 0);
+  if (onProgress) onProgress(1, baseBytes, grandTotal, 0);
   try { localStorage.setItem("uomtiles.installed", "1"); } catch (_) {}
   return await getStatus();
 }

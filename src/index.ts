@@ -59,6 +59,7 @@ app.get("/dji.geojson", async c => {
   return new Response(obj.body, {
     headers: {
       "content-type": "application/geo+json",
+      "content-length": String(obj.size),
       "cache-control": "public, max-age=86400",
     },
   });
