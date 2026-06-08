@@ -269,6 +269,7 @@ function tdtTiles(layer) {
 
 const sources = {
   uom: { type: "raster", url: "pmtiles://uom-pmtiles", tileSize: 256, attribution: "UOM 适飞" },
+  osmOffline: { type: "raster", url: "pmtiles://osm-base-pmtiles", tileSize: 256, attribution: "© OSM, © CARTO" },
   osm: { type: "raster", tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], tileSize: 256, minzoom: 0, maxzoom: 19, attribution: "© OSM" },
   cartoVoy: { type: "raster", tiles: ["https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png", "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png", "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"], tileSize: 256, minzoom: 0, maxzoom: 19, attribution: "© CARTO" },
   cartoDark: { type: "raster", tiles: ["https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"], tileSize: 256, minzoom: 0, maxzoom: 19, attribution: "© CARTO" },
@@ -292,19 +293,20 @@ if (tdtVec) {
 }
 
 const basemaps = [
-  { id: "osm", name: "街道", provider: "OSM", sources: ["osm"] },
-  { id: "cartoVoy", name: "矢量", provider: "CARTO", sources: ["cartoVoy"] },
-  { id: "cartoDark", name: "暗色", provider: "CARTO", sources: ["cartoDark"] },
-  { id: "esriSat", name: "影像", provider: "ESRI", sources: ["esriSat"] },
-  { id: "opentopo", name: "地形", provider: "OpenTopo", sources: ["opentopo"] },
-  { id: "amapVec", name: "矢量", provider: "高德", sources: ["amapVec"] },
-  { id: "amapSat", name: "影像", provider: "高德", sources: ["amapSat", "amapSatAnno"] },
+  { id: "osm", name: "街道", provider: "OSM", sources: ["osm"], requiresNetwork: true },
+  { id: "osmOffline", name: "离线", provider: "OSM", sources: ["osmOffline"], requiresOffline: true, maxZoom: 5 },
+  { id: "cartoVoy", name: "矢量", provider: "CARTO", sources: ["cartoVoy"], requiresNetwork: true },
+  { id: "cartoDark", name: "暗色", provider: "CARTO", sources: ["cartoDark"], requiresNetwork: true },
+  { id: "esriSat", name: "影像", provider: "ESRI", sources: ["esriSat"], requiresNetwork: true },
+  { id: "opentopo", name: "地形", provider: "OpenTopo", sources: ["opentopo"], requiresNetwork: true },
+  { id: "amapVec", name: "矢量", provider: "高德", sources: ["amapVec"], requiresNetwork: true },
+  { id: "amapSat", name: "影像", provider: "高德", sources: ["amapSat", "amapSatAnno"], requiresNetwork: true },
 ];
 if (TDT_TOKEN) {
   basemaps.push(
-    { id: "tdtVec", name: "矢量", provider: "天地图", sources: ["tdtVec", "tdtVecAnno"] },
-    { id: "tdtSat", name: "影像", provider: "天地图", sources: ["tdtSat", "tdtSatAnno"] },
-    { id: "tdtTer", name: "地形", provider: "天地图", sources: ["tdtTer", "tdtTerAnno"] },
+    { id: "tdtVec", name: "矢量", provider: "天地图", sources: ["tdtVec", "tdtVecAnno"], requiresNetwork: true },
+    { id: "tdtSat", name: "影像", provider: "天地图", sources: ["tdtSat", "tdtSatAnno"], requiresNetwork: true },
+    { id: "tdtTer", name: "地形", provider: "天地图", sources: ["tdtTer", "tdtTerAnno"], requiresNetwork: true },
   );
 }
 

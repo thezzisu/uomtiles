@@ -79,6 +79,20 @@ app.get("/uom-shifei.pmtiles", async c => {
   });
 });
 
+// Offline OSM (CARTO Voyager) basemap pmtiles, z=0-5 worldwide, ~20 MB.
+app.get("/osm-base.pmtiles", async c => {
+  const key = c.env.OSM_BASE_KEY || "osm-base.pmtiles";
+  const obj = await c.env.BUCKET.get(key);
+  if (!obj) return c.json({ error: "osm-base.pmtiles not in R2" }, 404);
+  return new Response(obj.body, {
+    headers: {
+      "content-type": "application/octet-stream",
+      "content-length": String(obj.size),
+      "cache-control": "public, max-age=86400",
+    },
+  });
+});
+
 app.get("/health", c => c.json({ ok: true, ts: Date.now() }));
 
 // Fallback: try static assets (e.g. /preview.css, /preview.js, /preview-app.js)

@@ -14,6 +14,7 @@ not_found_handling = "none"
 [vars]
 PMTILES_KEY = "uom-shifei.pmtiles"
 DJI_KEY = "dji.geojson"
+OSM_BASE_KEY = "osm-base.pmtiles"
 ALLOWED_ORIGINS = "*"
 CACHE_CONTROL = "public, max-age=31536000, immutable"
 

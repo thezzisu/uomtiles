@@ -77,6 +77,7 @@ basemaps.forEach(b => {
   if (!byProvider.has(b.provider)) byProvider.set(b.provider, []);
   byProvider.get(b.provider).push(b);
 });
+const chipEls = new Map(); // id -> button element
 byProvider.forEach((items, provider) => {
   const row = document.createElement("div");
   row.className = "bm-row";
@@ -93,15 +94,62 @@ byProvider.forEach((items, provider) => {
     btn.dataset.id = it.id;
     btn.setAttribute("aria-pressed", it.id === initialBasemapId ? "true" : "false");
     btn.addEventListener("click", () => {
+      if (btn.disabled) return;
       const isSelected = btn.getAttribute("aria-pressed") === "true";
       applyBasemap(isSelected ? null : it.id);
     });
+    chipEls.set(it.id, btn);
     chips.appendChild(btn);
   });
   row.appendChild(lbl);
   row.appendChild(chips);
   basemapList.appendChild(row);
 });
+
+// ---------- Online / offline awareness ----------
+// A chip is "available" iff:
+//   - it has no requiresNetwork/requiresOffline gate, OR
+//   - requiresNetwork and navigator.onLine is true, OR
+//   - requiresOffline and the offline OSM blob is in IDB.
+function isBasemapAvailable(cfg, online, osmAvailable) {
+  if (cfg.requiresOffline) return !!osmAvailable;
+  if (cfg.requiresNetwork) return !!online;
+  return true;
+}
+async function refreshBasemapAvailability() {
+  const online = navigator.onLine !== false;
+  let osmAvailable = false;
+  if (window.__uomOffline) {
+    const s = await window.__uomOffline.getStatus().catch(() => null);
+    osmAvailable = !!(s && s.osmAvailable);
+  }
+  // If the currently-selected basemap is no longer available, switch to a
+  // fallback (offline OSM if present, otherwise "no basemap").
+  const current = basemaps.find(b => b.id === currentBasemapId);
+  if (current && !isBasemapAvailable(current, online, osmAvailable)) {
+    if (osmAvailable && current.id !== "osmOffline") {
+      applyBasemap("osmOffline");
+    } else {
+      applyBasemap(null);
+    }
+  }
+  basemaps.forEach(b => {
+    const btn = chipEls.get(b.id);
+    if (!btn) return;
+    const ok = isBasemapAvailable(b, online, osmAvailable);
+    btn.disabled = !ok;
+    btn.classList.toggle("disabled", !ok);
+    if (b.requiresOffline && !osmAvailable) {
+      btn.title = "需要先下载离线数据";
+    } else if (b.requiresNetwork && !online) {
+      btn.title = "当前离线，无法加载网络底图";
+    } else {
+      btn.title = "";
+    }
+  });
+}
+window.addEventListener("online", refreshBasemapAvailability);
+window.addEventListener("offline", refreshBasemapAvailability);
 
 // ---------- Color swatches + opacity ----------
 const swatchesEl = document.getElementById("color-swatches");
@@ -365,14 +413,19 @@ window.__uomApp = { applyBasemap, applyColor, applyAlpha, COLOR_PRESETS, colorTo
   async function refresh() {
     const s = await off.getStatus();
     if (s.installed) {
-      const total = (s.pmtilesSize || 0) + (s.djiSize || 0);
+      const total = (s.pmtilesSize || 0) + (s.osmSize || 0) + (s.djiSize || 0);
       statusEl.innerHTML = `<span class="ok">已就绪</span>`;
-      statusEl.title = `共 ${fmt(total)} = UOM ${fmt(s.pmtilesSize)} + DJI ${fmt(s.djiSize)}`;
+      const parts = [];
+      parts.push(`UOM ${fmt(s.pmtilesSize)}`);
+      if (s.osmSize) parts.push(`OSM ${fmt(s.osmSize)}`);
+      parts.push(`DJI ${fmt(s.djiSize)}`);
+      statusEl.title = `共 ${fmt(total)} = ${parts.join(" + ")}`;
       btnRefresh.disabled = false;
     } else {
       statusEl.textContent = "—";
       statusEl.title = "";
     }
+    refreshBasemapAvailability();
   }
 
   // "刷新数据": clear IDB + caches, then reload (boot overlay re-downloads).

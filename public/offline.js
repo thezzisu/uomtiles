@@ -7,6 +7,7 @@
 const DB = "uomtiles-offline";
 const STORE = "blobs";
 const KEY_PMTILES = "uom-pmtiles";
+const KEY_OSM = "osm-base-pmtiles";
 const KEY_DJI = "dji-geojson";
 
 function openDB() {
@@ -47,14 +48,18 @@ async function idbDel(key) {
 
 async function getStatus() {
   try {
-    const [pm, dji] = await Promise.all([idbGet(KEY_PMTILES), idbGet(KEY_DJI)]);
+    const [pm, osm, dji] = await Promise.all([
+      idbGet(KEY_PMTILES), idbGet(KEY_OSM), idbGet(KEY_DJI),
+    ]);
     return {
       installed: !!pm,
       pmtilesSize: pm ? pm.size : 0,
+      osmSize: osm ? osm.size : 0,
       djiSize: dji ? (dji.byteLength || dji.size || 0) : 0,
+      osmAvailable: !!osm,
     };
   } catch (_) {
-    return { installed: false, pmtilesSize: 0, djiSize: 0 };
+    return { installed: false, pmtilesSize: 0, osmSize: 0, djiSize: 0, osmAvailable: false };
   }
 }
 
@@ -89,23 +94,33 @@ async function downloadBlob(url, onProgress) {
 
 let pmtilesProtocolRegistered = false;
 let pmtilesProtocolInstance = null;
-async function installPmtilesProtocol(blob) {
-  if (!window.pmtiles || !window.maplibregl) return false;
-  // Duck-typed FileSource: needs `name` (key) + `slice(o, o+l).arrayBuffer()`.
-  const fakeFile = {
-    name: KEY_PMTILES,
+function makeBlobSource(blob, name) {
+  return new window.pmtiles.FileSource({
+    name,
     slice: (a, b) => blob.slice(a, b),
     arrayBuffer: () => blob.arrayBuffer(),
-  };
-  const source = new window.pmtiles.FileSource(fakeFile);
-  const pm = new window.pmtiles.PMTiles(source);
-  if (!pmtilesProtocolRegistered) {
-    pmtilesProtocolInstance = new window.pmtiles.Protocol();
-    window.maplibregl.addProtocol("pmtiles", pmtilesProtocolInstance.tile.bind(pmtilesProtocolInstance));
-    pmtilesProtocolRegistered = true;
-  }
+  });
+}
+function ensureProtocol() {
+  if (pmtilesProtocolRegistered) return;
+  pmtilesProtocolInstance = new window.pmtiles.Protocol();
+  window.maplibregl.addProtocol("pmtiles", pmtilesProtocolInstance.tile.bind(pmtilesProtocolInstance));
+  pmtilesProtocolRegistered = true;
+}
+async function installPmtilesProtocol(blob) {
+  if (!window.pmtiles || !window.maplibregl) return false;
+  const pm = new window.pmtiles.PMTiles(makeBlobSource(blob, KEY_PMTILES));
+  ensureProtocol();
   pmtilesProtocolInstance.add(pm);
   window.__uomOfflinePM = pm;
+  return true;
+}
+async function installOsmBaseProtocol(blob) {
+  if (!window.pmtiles || !window.maplibregl) return false;
+  const pm = new window.pmtiles.PMTiles(makeBlobSource(blob, KEY_OSM));
+  ensureProtocol();
+  pmtilesProtocolInstance.add(pm);
+  window.__uomOfflineOsmPM = pm;
   return true;
 }
 
@@ -115,12 +130,16 @@ async function init() {
     try { localStorage.setItem("uomtiles.installed", "1"); } catch (_) {}
     await installPmtilesProtocol(blob).catch(e => console.warn("pmtiles install failed", e));
   }
-  return { installed: !!blob };
+  const osm = await idbGet(KEY_OSM).catch(() => null);
+  if (osm) {
+    await installOsmBaseProtocol(osm).catch(e => console.warn("osm-base install failed", e));
+  }
+  return { installed: !!blob, osmAvailable: !!osm };
 }
 
 async function download(onProgress) {
-  // Probe content-length for both assets so we can show a single, accurate
-  // progress meter that covers UOM (pmtiles) + DJI (geojson).
+  // Probe content-length for all three assets so we can show a single,
+  // accurate progress meter covering UOM + OSM base + DJI.
   const probe = async url => {
     try {
       const r = await fetch(url, { method: "HEAD" });
@@ -128,28 +147,35 @@ async function download(onProgress) {
       return cl > 0 ? cl : 0;
     } catch (_) { return 0; }
   };
-  let [pmTotal, djiTotal] = await Promise.all([
+  let [pmTotal, osmTotal, djiTotal] = await Promise.all([
     probe("/uom-shifei.pmtiles"),
+    probe("/osm-base.pmtiles"),
     probe("/dji.geojson"),
   ]);
-  // DJI fallback estimate: 6 MB is a safe upper bound for the geojson;
-  // real value will overwrite this once the first chunk arrives.
+  // Fallback estimates; will be tightened from streaming content-length.
+  if (!osmTotal) osmTotal = 25 * 1024 * 1024;
   if (!djiTotal) djiTotal = 6 * 1024 * 1024;
-  let grandTotal = pmTotal + djiTotal;
+  let grandTotal = pmTotal + osmTotal + djiTotal;
 
   let baseBytes = 0;
+  let phase = "pm"; // "pm" | "osm" | "dji"
   const onChunk = (recv, total, bps) => {
     if (!onProgress) return;
-    const merged = baseBytes + recv;
-    // If a stream reports a more accurate total than our probe, adopt it.
     if (total) {
-      const expected = baseBytes ? pmTotal + total : total + djiTotal;
+      // Tighten the grand total using the live content-length of the in-flight asset.
+      let expected;
+      if (phase === "pm") expected = total + osmTotal + djiTotal;
+      else if (phase === "osm") expected = pmTotal + total + djiTotal;
+      else expected = pmTotal + osmTotal + total;
       if (expected > grandTotal) grandTotal = expected;
     }
+    const merged = baseBytes + recv;
     const ratio = grandTotal ? Math.min(1, merged / grandTotal) : 0;
     onProgress(ratio, merged, grandTotal, bps);
   };
 
+  // 1. UOM pmtiles
+  phase = "pm";
   const pmBlob = await downloadBlob(
     "/uom-shifei.pmtiles",
     (_p, recv, total, bps) => onChunk(recv, total, bps)
@@ -158,6 +184,23 @@ async function download(onProgress) {
   baseBytes += pmBlob.size;
   if (pmBlob.size > pmTotal) pmTotal = pmBlob.size;
 
+  // 2. OSM base pmtiles (best-effort; if missing on the server we silently skip)
+  phase = "osm";
+  try {
+    const osmBlob = await downloadBlob(
+      "/osm-base.pmtiles",
+      (_p, recv, total, bps) => onChunk(recv, total, bps)
+    );
+    await idbPut(KEY_OSM, osmBlob);
+    baseBytes += osmBlob.size;
+    osmTotal = osmBlob.size;
+  } catch (e) {
+    console.warn("osm-base download failed (will retry next time)", e);
+    osmTotal = 0;
+  }
+
+  // 3. DJI geojson
+  phase = "dji";
   try {
     const djiBlob = await downloadBlob(
       "/dji.geojson",
@@ -171,15 +214,19 @@ async function download(onProgress) {
     console.warn("dji download failed", e);
   }
 
-  grandTotal = pmTotal + djiTotal;
+  grandTotal = pmTotal + osmTotal + djiTotal;
   await installPmtilesProtocol(pmBlob).catch(e => console.warn("pmtiles install failed", e));
+  const osmInIdb = await idbGet(KEY_OSM).catch(() => null);
+  if (osmInIdb) {
+    await installOsmBaseProtocol(osmInIdb).catch(e => console.warn("osm-base install failed", e));
+  }
   if (onProgress) onProgress(1, baseBytes, grandTotal, 0);
   try { localStorage.setItem("uomtiles.installed", "1"); } catch (_) {}
   return await getStatus();
 }
 
 async function purge() {
-  await Promise.all([idbDel(KEY_PMTILES), idbDel(KEY_DJI)]);
+  await Promise.all([idbDel(KEY_PMTILES), idbDel(KEY_OSM), idbDel(KEY_DJI)]);
   try { localStorage.removeItem("uomtiles.installed"); } catch (_) {}
   // Best-effort: clear caches and unregister SW.
   try {
@@ -193,6 +240,7 @@ async function purge() {
     }
   } catch (_) {}
   window.__uomOfflinePM = null;
+  window.__uomOfflineOsmPM = null;
   pmtilesProtocolRegistered = false;
   if (window.maplibregl && window.maplibregl.removeProtocol) {
     try { window.maplibregl.removeProtocol("pmtiles"); } catch (_) {}
@@ -206,7 +254,8 @@ async function getCachedDji() {
 }
 
 window.__uomOffline = {
-  init, download, purge, getStatus, installPmtilesProtocol, getCachedDji,
-  KEY_PMTILES, KEY_DJI,
+  init, download, purge, getStatus,
+  installPmtilesProtocol, installOsmBaseProtocol, getCachedDji,
+  KEY_PMTILES, KEY_OSM, KEY_DJI,
 };
 })();

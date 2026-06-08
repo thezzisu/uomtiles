@@ -12,6 +12,7 @@ export type Env = {
   BUCKET: R2Bucket;
   PMTILES_KEY: string;
   DJI_KEY: string;
+  OSM_BASE_KEY?: string;
   ALLOWED_ORIGINS?: string;
   CACHE_CONTROL?: string;
 };
